@@ -664,12 +664,14 @@
             const masterGain = offlineCtx.createGain();
             masterGain.gain.value = 0.9;
             masterGain.connect(offlineCtx.destination);
+
             customNotes.forEach(note => {
                 const when = note.startTime;
                 const dur = Math.max(0.1, note.endTime - note.startTime);
                 const vol = (note.velocity / 127) * ((note.customVolumeScale || 100) / 100);
                 const gain = offlineCtx.createGain();
                 gain.connect(masterGain);
+
                 if (note.customSampleIndex != null && customSamples[note.customSampleIndex]) {
                     const sample = customSamples[note.customSampleIndex];
                     const src = offlineCtx.createBufferSource();
@@ -702,24 +704,42 @@
                     osc.stop(when + dur + 0.05);
                 }
             });
+
             const renderedBuffer = await offlineCtx.startRendering();
             const mp3encoder = new lamejs.Mp3Encoder(2, 44100, 128);
             const left = renderedBuffer.getChannelData(0);
             const right = renderedBuffer.getChannelData(1);
-            const samples = new Int16Array(left.length * 2);
-            for (let i = 0; i < left.length; i++) {
-                samples[i * 2] = Math.max(-32768, Math.min(32767, left[i] * 32767));
-                samples[i * 2 + 1] = Math.max(-32768, Math.min(32767, right[i] * 32767));
+            const mp3Data = [];
+            const sampleBlockSize = 1152;
+
+            for (let i = 0; i < left.length; i += sampleBlockSize) {
+                const leftChunk = left.subarray(i, i + sampleBlockSize);
+                const rightChunk = right.subarray(i, i + sampleBlockSize);
+                const leftInt = new Int16Array(leftChunk.length);
+                const rightInt = new Int16Array(rightChunk.length);
+                for (let j = 0; j < leftChunk.length; j++) {
+                    leftInt[j] = Math.max(-32768, Math.min(32767, leftChunk[j] * 32767));
+                    rightInt[j] = Math.max(-32768, Math.min(32767, rightChunk[j] * 32767));
+                }
+                const mp3buf = mp3encoder.encodeBuffer(leftInt, rightInt);
+                if (mp3buf.length > 0) {
+                    mp3Data.push(mp3buf);
+                }
             }
-            const mp3Data = mp3encoder.encodeBuffer(samples);
-            const endData = mp3encoder.flush();
-            const blob = new Blob([mp3Data, endData], { type: 'audio/mp3' });
+
+            const mp3buf = mp3encoder.flush();
+            if (mp3buf.length > 0) {
+                mp3Data.push(new Uint8Array(mp3buf));
+            }
+
+            const blob = new Blob(mp3Data, { type: 'audio/mp3' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = 'custom_midi.mp3';
             a.click();
             URL.revokeObjectURL(url);
+
         } catch (err) {
             alert('导出失败: ' + err.message);
         }
