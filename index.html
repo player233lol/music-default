@@ -57,6 +57,8 @@
         .btn-export:hover { background:#4f46e5; }
         .btn-export:disabled { background:#9ca3af; color:#e5e7eb; cursor:not-allowed; pointer-events:auto; }
         .btn:disabled { opacity:0.4; cursor:not-allowed; pointer-events:none; filter:grayscale(20%); }
+        .btn-danger { background:#ef4444; color:white; }
+        .btn-danger:hover { background:#dc2626; }
         .time-display { font-size:13px; color:var(--text-secondary); margin-left:6px; font-weight:500; }
         .visualizer-wrapper {
             position:relative; width:100%; background:#fff; border-radius:0; overflow:hidden;
@@ -124,6 +126,7 @@
             padding:8px; border-radius:4px;
         }
         .sample-picker-box .cancel-btn:hover { background:#f1f5f9; }
+        .btn-group { display:flex; gap:8px; }
         @media (max-width:600px){ body{padding:16px 10px 30px;} .btn{padding:8px 18px;font-size:13px;} .visualizer-wrapper{min-height:160px;} }
     </style>
 </head>
@@ -192,7 +195,10 @@
 
     <div class="sample-list" id="sampleList"></div>
 
-    <button class="btn btn-export" id="btnExportCustom" disabled style="align-self:flex-start;">⬇️ 导出 MP3（自定义音色）</button>
+    <div class="btn-group">
+        <button class="btn btn-export" id="btnExportCustom" disabled>⬇️ 导出 MP3（自定义音色）</button>
+        <button class="btn btn-danger" id="btnResetAll" disabled>重置所有工作</button>
+    </div>
     <div class="footer-note">player233lol制作 | 反馈634832107</div>
 </div>
 
@@ -211,6 +217,7 @@
     const wavFileInput = document.getElementById('wavFileInput');
     const sampleListDiv = document.getElementById('sampleList');
     const btnExportCustom = document.getElementById('btnExportCustom');
+    const btnResetAll = document.getElementById('btnResetAll');
 
     const vis1 = document.getElementById('visualizerOriginal');
     const layer1 = document.getElementById('notesLayer1');
@@ -239,6 +246,7 @@
     let customSamples = [];
     const sampleColors = ['#e53e3e','#dd6b20','#d69e2e','#3182ce','#6b46c1','#00a3c4','#805ad5','#38b2ac','#d53f8c','#c05621'];
     const lookAhead = 3.4;
+    let midiFileBase64 = null;
 
     const player1 = { isPlaying: false, animationId: null, scheduledNotes: new Set(), activeOscillators: [], playStartTime: 0, logicalStartOffset: 0, currentLogicalTime: 0 };
     const player2 = { isPlaying: false, animationId: null, scheduledNotes: new Set(), activeOscillators: [], playStartTime: 0, logicalStartOffset: 0, currentLogicalTime: 0 };
@@ -275,6 +283,49 @@
         sfx:{color:'#a0aec0',name:'音效',waveform:'sine',attack:0.01,decay:0.5,sustain:0.2},
     };
     function getConfigForProgram(p){ return instrumentConfig[getInstrumentGroup(p)] || instrumentConfig.piano; }
+
+    function arrayBufferToBase64(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+        return btoa(binary);
+    }
+    function base64ToArrayBuffer(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes.buffer;
+    }
+
+    function saveState() {
+        try {
+            const state = {
+                midiBase64: midiFileBase64,
+                samples: customSamples.map(s => ({
+                    fileName: s.fileName,
+                    color: s.color,
+                    basePitch: s.basePitch,
+                    bufferBase64: s.buffer ? arrayBufferToBase64(s.buffer) : null
+                })),
+                customNotesAssign: customNotes.map(n => ({
+                    customSampleIndex: n.customSampleIndex,
+                    customPitchOffset: n.customPitchOffset,
+                    customVolumeScale: n.customVolumeScale
+                }))
+            };
+            localStorage.setItem('soundmaker_state', JSON.stringify(state));
+        } catch(e) {}
+    }
+
+    function loadState() {
+        const raw = localStorage.getItem('soundmaker_state');
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch(e) { return null; }
+    }
+
+    function clearState() {
+        localStorage.removeItem('soundmaker_state');
+    }
 
     function parseMIDI(arrayBuffer) {
         const data = new Uint8Array(arrayBuffer);
@@ -369,7 +420,7 @@
 
     function scheduleNoteForPlayer(note, when, playerState){
         if(!audioCtx||!masterGain) return;
-        const useSample = (note.customSampleIndex != null && customSamples[note.customSampleIndex]);
+        const useSample = (note.customSampleIndex != null && customSamples[note.customSampleIndex] && customSamples[note.customSampleIndex].buffer);
         const vol = (note.velocity/127) * ((note.customVolumeScale||100)/100);
         const duration = Math.max(0.03, note.endTime - note.startTime);
         const gain = audioCtx.createGain(); gain.connect(masterGain);
@@ -454,10 +505,17 @@
             if(!block){
                 block = document.createElement('div'); block.className = 'note-block';
                 block.dataset.noteIndex = idx;
-                block.style.backgroundColor = isCustom ? (customSamples[note.customSampleIndex]?.color || '#aaa') : note.color;
+                const sampleIdx = note.customSampleIndex;
+                const color = (isCustom && sampleIdx != null && customSamples[sampleIdx]) ? customSamples[sampleIdx].color : note.color;
+                block.style.backgroundColor = color || '#aaa';
                 layer.appendChild(block);
             } else {
                 if(!isCustom) block.style.backgroundColor = note.color;
+                else {
+                    const sampleIdx = note.customSampleIndex;
+                    const color = (sampleIdx != null && customSamples[sampleIdx]) ? customSamples[sampleIdx].color : '#aaa';
+                    block.style.backgroundColor = color;
+                }
             }
             if(isCurrentlyPlaying) block.classList.add('playing');
             else block.classList.remove('playing');
@@ -586,40 +644,51 @@
         updateTimeDisplay(0, timeDisp);
     }
 
+    function loadMIDIFromBuffer(arrayBuffer, fileName) {
+        try {
+            const parsed = parseMIDI(arrayBuffer);
+            allNotes = parsed.notes; totalDuration = parsed.totalSeconds; usedInstruments = parsed.instrumentSet;
+            allNotes.forEach((n,i) => n._index = i);
+            midiFileBase64 = arrayBufferToBase64(arrayBuffer);
+            buildCustomNotes();
+            trackCountEl.textContent = parsed.numTracks; noteCountEl.textContent = allNotes.length;
+            const dm = Math.floor(totalDuration/60), ds = Math.floor(totalDuration%60);
+            durationDisplayEl.textContent = dm+'分'+ds+'秒';
+            bpmDisplayEl.textContent = '~'+(Math.round((allNotes.length>0?60/(totalDuration/Math.max(1,allNotes.length/4)):120)/5)*5);
+            btnPlay1.disabled=false; btnReset1.disabled=false;
+            btnPlay2.disabled=false; btnReset2.disabled=false;
+            btnExportCustom.disabled = false;
+            btnResetAll.disabled = false;
+            updateLegend();
+            resetPlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1);
+            resetPlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2);
+            layer1.innerHTML=''; layer2.innerHTML='';
+            buildGridLines(grid1); buildGridLines(grid2);
+            refreshWaterfall1(); refreshWaterfall2();
+            if (fileName) {
+                fileNameEl.textContent = fileName;
+                uploadArea.classList.add('has-file');
+            }
+            saveState();
+        } catch(err) { alert('MIDI解析失败: '+err.message); resetAll(); }
+    }
+
     function loadMIDIFile(file){
-        fileNameEl.textContent = file.name;
-        uploadArea.classList.add('has-file');
         const reader = new FileReader();
         reader.onload = (e) => {
-            try{
-                const parsed = parseMIDI(e.target.result);
-                allNotes = parsed.notes; totalDuration = parsed.totalSeconds; usedInstruments = parsed.instrumentSet;
-                allNotes.forEach((n,i) => n._index = i);
-                buildCustomNotes();
-                trackCountEl.textContent = parsed.numTracks; noteCountEl.textContent = allNotes.length;
-                const dm = Math.floor(totalDuration/60), ds = Math.floor(totalDuration%60);
-                durationDisplayEl.textContent = dm+'分'+ds+'秒';
-                bpmDisplayEl.textContent = '~'+(Math.round((allNotes.length>0?60/(totalDuration/Math.max(1,allNotes.length/4)):120)/5)*5);
-                btnPlay1.disabled=false; btnReset1.disabled=false;
-                btnPlay2.disabled=false; btnReset2.disabled=false;
-                btnExportCustom.disabled = false;
-                updateLegend();
-                resetPlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1);
-                resetPlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2);
-                layer1.innerHTML=''; layer2.innerHTML='';
-                buildGridLines(grid1); buildGridLines(grid2);
-                refreshWaterfall1(); refreshWaterfall2();
-            } catch(err){ alert('MIDI解析失败: '+err.message); resetAll(); }
+            const arrayBuffer = e.target.result;
+            loadMIDIFromBuffer(arrayBuffer, file.name);
         };
         reader.readAsArrayBuffer(file);
     }
 
     function buildCustomNotes(){
         const oldCustom = customNotes.length === allNotes.length ? customNotes : [];
+        const defaultIdx = customSamples.length > 0 ? 0 : null;
         customNotes = allNotes.map((note, i) => {
             const old = oldCustom[i] || {};
             const newNote = {...note, _index: i};
-            newNote.customSampleIndex = (old.customSampleIndex !== undefined && old.customSampleIndex < customSamples.length) ? old.customSampleIndex : (customSamples.length > 0 ? 0 : null);
+            newNote.customSampleIndex = (old.customSampleIndex !== undefined && old.customSampleIndex < customSamples.length) ? old.customSampleIndex : defaultIdx;
             newNote.customPitchOffset = old.customPitchOffset || 0;
             newNote.customVolumeScale = old.customVolumeScale || 100;
             return newNote;
@@ -639,30 +708,49 @@
         stopPlayerSound(player1); stopPlayerSound(player2);
         if(player1.isPlaying){ player1.isPlaying=false; if(player1.animationId) cancelAnimationFrame(player1.animationId); }
         if(player2.isPlaying){ player2.isPlaying=false; if(player2.animationId) cancelAnimationFrame(player2.animationId); }
-        allNotes=[]; customNotes=[]; usedInstruments.clear(); totalDuration=0;
+        allNotes=[]; customNotes=[]; usedInstruments.clear(); totalDuration=0; midiFileBase64=null;
+        customSamples = [];
         player1.currentLogicalTime=0; player2.currentLogicalTime=0;
         layer1.innerHTML=''; layer2.innerHTML='';
         fileNameEl.textContent=''; uploadArea.classList.remove('has-file');
         btnPlay1.disabled=true; btnReset1.disabled=true;
         btnPlay2.disabled=true; btnReset2.disabled=true;
         btnExportCustom.disabled = true;
+        btnResetAll.disabled = true;
         btnPlay1.classList.remove('paused-state'); btnPlayText1.textContent='播放';
         btnPlay2.classList.remove('paused-state'); btnPlayText2.textContent='播放';
         playLine1.style.background='#1e293b'; playLine2.style.background='#1e293b';
         trackCountEl.textContent='-'; noteCountEl.textContent='-'; durationDisplayEl.textContent='-'; bpmDisplayEl.textContent='-';
         timeDisplay1.textContent='00:00 / 00:00'; timeDisplay2.textContent='00:00 / 00:00';
         legendRow.style.display='none';
+        sampleListDiv.innerHTML = '';
+        clearState();
     }
 
-    function addSample(buffer, name){
-        if(customSamples.length >= 10){ alert('最多支持10个音色'); return; }
+    function addSampleFromBuffer(buffer, name, base64Data) {
+        if(customSamples.length >= 10){ alert('最多支持10个音色'); return false; }
         const idx = customSamples.length;
-        customSamples.push({buffer, fileName: name, basePitch: 60, color: sampleColors[idx%sampleColors.length]});
+        const color = sampleColors[idx%sampleColors.length];
+        customSamples.push({buffer, fileName: name, basePitch: 60, color: color, bufferBase64: base64Data});
         renderSamples();
         if(allNotes.length > 0){
             if(customNotes.length === 0) buildCustomNotes();
+            else {
+                customNotes.forEach(n => {
+                    if (n.customSampleIndex === null || n.customSampleIndex === undefined) {
+                        n.customSampleIndex = 0;
+                    }
+                });
+            }
             refreshWaterfall2();
+            saveState();
         }
+        return true;
+    }
+
+    function addSample(buffer, name){
+        const base64 = arrayBufferToBase64(buffer);
+        return addSampleFromBuffer(buffer, name, base64);
     }
 
     function removeSample(idx){
@@ -674,22 +762,23 @@
             });
         }
         renderSamples();
-        if(allNotes.length > 0) refreshWaterfall2();
+        if(allNotes.length > 0) { refreshWaterfall2(); saveState(); }
     }
 
     function renderSamples(){
         sampleListDiv.innerHTML = '';
         customSamples.forEach((s,i) => {
             const div = document.createElement('div'); div.className = 'sample-item';
+            const hasBuffer = !!s.buffer;
             div.innerHTML = `<div class="sample-color" style="background:${s.color}">#Note${i}</div>
-                     <div class="sample-info">${s.fileName} (基准:Do/C4)</div>
+                     <div class="sample-info">${s.fileName} ${hasBuffer ? '' : '(缺失)'} (基准:Do/C4)</div>
                      <div class="sample-delete">✕</div>`;
             div.querySelector('.sample-delete').onclick = (e) => { e.stopPropagation(); removeSample(i); };
             sampleListDiv.appendChild(div);
         });
     }
 
-    function showSamplePicker(noteIndex, x, y) {
+    function showSamplePicker(noteIndex) {
         if (!customSamples.length) return;
         const overlay = document.createElement('div');
         overlay.className = 'sample-picker-overlay';
@@ -712,6 +801,7 @@
                 if (customNotes[noteIndex]) {
                     customNotes[noteIndex].customSampleIndex = idx;
                     refreshWaterfall2();
+                    saveState();
                     document.body.removeChild(overlay);
                 }
             });
@@ -755,7 +845,7 @@
             longPressTimer = setTimeout(() => {
                 const idx = parseInt(longPressTarget.dataset.noteIndex);
                 if (!isNaN(idx) && customNotes[idx]) {
-                    showSamplePicker(idx, clientX, clientY);
+                    showSamplePicker(idx);
                 }
                 clearLongPress();
             }, LONG_PRESS_MS);
@@ -792,7 +882,7 @@
     btnExportCustom.addEventListener('click', async () => {
         if (!customNotes.length) return;
         btnExportCustom.disabled = true;
-        btnExportCustom.textContent = '渲染中... 这可能需要一些时间...';
+        btnExportCustom.textContent = '渲染中…';
         try {
             const offlineCtx = new OfflineAudioContext(2, 44100 * Math.ceil(totalDuration + 1), 44100);
             const masterGain = offlineCtx.createGain();
@@ -806,8 +896,10 @@
                 const gain = offlineCtx.createGain();
                 gain.connect(masterGain);
 
-                if (note.customSampleIndex != null && customSamples[note.customSampleIndex]) {
-                    const sample = customSamples[note.customSampleIndex];
+                const sampleIdx = note.customSampleIndex;
+                const hasSample = (sampleIdx != null && customSamples[sampleIdx] && customSamples[sampleIdx].buffer);
+                if (hasSample) {
+                    const sample = customSamples[sampleIdx];
                     const src = offlineCtx.createBufferSource();
                     src.buffer = sample.buffer;
                     const basePitch = sample.basePitch || 60;
@@ -881,6 +973,11 @@
         btnExportCustom.textContent = '⬇️ 导出 MP3（自定义音色）';
     });
 
+    btnResetAll.addEventListener('click', () => {
+        if (!confirm('确定要重置所有工作吗？所有数据将被清除。')) return;
+        resetAll();
+    });
+
     uploadArea.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => { if(fileInput.files[0]){ loadMIDIFile(fileInput.files[0]); fileInput.value=''; } });
     btnPlay1.addEventListener('click', () => { if(!allNotes.length) return; initAudio(); player1.isPlaying ? pausePlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1) : startPlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1); });
@@ -908,16 +1005,123 @@
         }
         initAudio();
         const reader = new FileReader();
-        reader.onload = (e) => audioCtx.decodeAudioData(e.target.result).then(buf => addSample(buf, file.name)).catch(() => alert('WAV解码失败'));
+        reader.onload = (e) => {
+            const arrayBuffer = e.target.result;
+            audioCtx.decodeAudioData(arrayBuffer).then(buf => {
+                addSample(buf, file.name);
+                wavFileInput.value = '';
+            }).catch(() => alert('WAV解码失败'));
+        };
         reader.readAsArrayBuffer(file);
-        wavFileInput.value = '';
     });
 
     window.addEventListener('resize', () => { buildGridLines(grid1); buildGridLines(grid2); if(allNotes.length){ refreshWaterfall1(); refreshWaterfall2(); } });
 
-    buildGridLines(grid1); buildGridLines(grid2);
-    resetAll();
-    setupLongPress();
+    function tryRestoreState() {
+        const state = loadState();
+        if (!state) return false;
+        if (!state.midiBase64 || !state.samples) return false;
+        try {
+            const midiBuf = base64ToArrayBuffer(state.midiBase64);
+            const parsed = parseMIDI(midiBuf);
+            allNotes = parsed.notes; totalDuration = parsed.totalSeconds; usedInstruments = parsed.instrumentSet;
+            allNotes.forEach((n,i) => n._index = i);
+            midiFileBase64 = state.midiBase64;
+
+            customSamples = [];
+            state.samples.forEach((s, idx) => {
+                const color = s.color || sampleColors[idx % sampleColors.length];
+                let buffer = null;
+                if (s.bufferBase64) {
+                    try {
+                        const buf = base64ToArrayBuffer(s.bufferBase64);
+                        // 解码为AudioBuffer，但这里不能同步解码，所以先存起来，稍后异步解码
+                        // 我们存储bufferBase64，在播放时再解码？但播放时需要AudioBuffer。我们可以在恢复时异步解码所有采样。
+                        // 这里我们只存元数据，稍后解码。
+                        customSamples.push({
+                            fileName: s.fileName,
+                            color: color,
+                            basePitch: s.basePitch || 60,
+                            bufferBase64: s.bufferBase64,
+                            buffer: null // 待解码
+                        });
+                    } catch(e) { /* ignore */ }
+                } else {
+                    customSamples.push({
+                        fileName: s.fileName,
+                        color: color,
+                        basePitch: s.basePitch || 60,
+                        bufferBase64: null,
+                        buffer: null
+                    });
+                }
+            });
+
+            // 恢复customNotes分配
+            if (state.customNotesAssign && state.customNotesAssign.length === allNotes.length) {
+                customNotes = allNotes.map((note, i) => {
+                    const assign = state.customNotesAssign[i] || {};
+                    const newNote = {...note, _index: i};
+                    newNote.customSampleIndex = (assign.customSampleIndex !== undefined && assign.customSampleIndex < customSamples.length) ? assign.customSampleIndex : (customSamples.length > 0 ? 0 : null);
+                    newNote.customPitchOffset = assign.customPitchOffset || 0;
+                    newNote.customVolumeScale = assign.customVolumeScale || 100;
+                    return newNote;
+                });
+            } else {
+                buildCustomNotes();
+            }
+
+            // 更新UI
+            trackCountEl.textContent = parsed.numTracks; noteCountEl.textContent = allNotes.length;
+            const dm = Math.floor(totalDuration/60), ds = Math.floor(totalDuration%60);
+            durationDisplayEl.textContent = dm+'分'+ds+'秒';
+            bpmDisplayEl.textContent = '~'+(Math.round((allNotes.length>0?60/(totalDuration/Math.max(1,allNotes.length/4)):120)/5)*5);
+            btnPlay1.disabled=false; btnReset1.disabled=false;
+            btnPlay2.disabled=false; btnReset2.disabled=false;
+            btnExportCustom.disabled = false;
+            btnResetAll.disabled = false;
+            updateLegend();
+            resetPlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1);
+            resetPlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2);
+            layer1.innerHTML=''; layer2.innerHTML='';
+            buildGridLines(grid1); buildGridLines(grid2);
+            refreshWaterfall1(); refreshWaterfall2();
+            fileNameEl.textContent = '已恢复的工作';
+            uploadArea.classList.add('has-file');
+            renderSamples();
+
+            // 异步解码采样
+            if (customSamples.length > 0) {
+                const decodePromises = customSamples.map((s, idx) => {
+                    if (s.bufferBase64) {
+                        return audioCtx.decodeAudioData(base64ToArrayBuffer(s.bufferBase64)).then(buf => {
+                            customSamples[idx].buffer = buf;
+                        }).catch(() => {});
+                    }
+                    return Promise.resolve();
+                });
+                Promise.all(decodePromises).then(() => {
+                    refreshWaterfall2();
+                    saveState(); // 更新状态
+                });
+            }
+
+            return true;
+        } catch(e) { return false; }
+    }
+
+    function init() {
+        buildGridLines(grid1); buildGridLines(grid2);
+        resetAll();
+        initAudio();
+        const restored = tryRestoreState();
+        if (restored) {
+            alert('欢迎回来，您的工作已恢复');
+        }
+        setupLongPress();
+    }
+
+    init();
 })();
 </script>
 </body>
