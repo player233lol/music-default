@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音mad快速制作</title>
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+    <style>
+        :root {
+            --bg: #f5f6f8;
+            --surface: #ffffff;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --border-light: #e2e8f0;
+            --accent-green: #22c55e;
+            --accent-blue: #3b82f6;
+            --accent-yellow: #f59e0b;
+            --play-line-color: #1e293b;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            background:var(--bg); font-family:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+            padding:24px 20px 40px; display:flex; justify-content:center; color:var(--text);
+        }
+        .player-container { width:100%; max-width:900px; display:flex; flex-direction:column; gap:18px; }
+        .upload-area {
+            border:2.5px dashed #cbd5e1; border-radius:14px; padding:16px 24px; text-align:center;
+            cursor:pointer; transition:0.2s; background:var(--surface); box-shadow:var(--shadow-sm);
+        }
+        .upload-area:hover { border-color:#94a3b8; background:#f8fafc; }
+        .upload-area.has-file { border-color:var(--accent-green); border-style:solid; background:#f0fdf4; }
+        .upload-icon { font-size:32px; display:block; margin-bottom:4px; }
+        .upload-text { font-size:14px; font-weight:600; }
+        .upload-sub { font-size:12px; color:var(--text-secondary); margin-top:2px; }
+        .file-name { color:#16a34a; font-weight:600; font-size:13px; margin-top:4px; word-break:break-all; }
+        #fileInput, #wavFileInput { display:none; }
+        .info-legend-block { background:var(--surface); border:1px solid var(--border-light); border-radius:0; box-shadow:var(--shadow-sm); }
+        .info-row {
+            display:flex; align-items:center; gap:14px; flex-wrap:wrap; font-size:12px;
+            color:var(--text-secondary); padding:10px 18px; border-bottom:1px solid var(--border-light);
+        }
+        .info-badge { background:#f1f5f9; border-radius:20px; padding:4px 12px; font-weight:500; color:var(--text); }
+        .info-badge strong { color:#0f172a; }
+        .legend-row { display:flex; flex-wrap:wrap; align-items:center; gap:12px; font-size:13px; color:var(--text-secondary); padding:12px 18px; }
+        .legend-label { font-weight:600; color:var(--text); }
+        .legend-item { display:inline-flex; align-items:center; gap:6px; font-weight:500; }
+        .legend-dot { width:12px; height:12px; border-radius:3px; border:1px solid rgba(0,0,0,0.2); }
+        .btn { border:none; border-radius:24px; padding:10px 24px; font-size:14px; font-weight:600; cursor:pointer; transition:0.2s; outline:none; white-space:nowrap; box-shadow:var(--shadow-sm); }
+        .btn-play { background:#22c55e; color:white; }
+        .btn-play:hover { background:#16a34a; }
+        .btn-play.paused-state { background:#3b82f6; }
+        .btn-reset { background:#f59e0b; color:white; }
+        .btn-reset:hover { background:#d97706; }
+        .btn-export { background:#6366f1; color:white; }
+        .btn-export:hover { background:#4f46e5; }
+        .btn-export:disabled { background:#9ca3af; color:#e5e7eb; cursor:not-allowed; pointer-events:auto; }
+        .btn:disabled { opacity:0.4; cursor:not-allowed; pointer-events:none; filter:grayscale(20%); }
+        .time-display { font-size:13px; color:var(--text-secondary); margin-left:6px; font-weight:500; }
+        .visualizer-wrapper {
+            position:relative; width:100%; background:#fff; border-radius:0; overflow:hidden;
+            border:1px solid var(--border-light);
+            box-shadow:inset 0 0 30px rgba(0,0,0,0.03),var(--shadow-sm);
+            aspect-ratio:1/2; min-height:200px;
+        }
+        .visualizer-inner { position:absolute; inset:0; overflow:hidden; }
+        .grid-lines { position:absolute; inset:0; pointer-events:none; z-index:0; }
+        .grid-line { position:absolute; left:0; right:0; height:1px; background:rgba(0,0,0,0.06); }
+        .play-line { position:absolute; left:0; right:0; top:10px; height:3px; background:var(--play-line-color); z-index:10; pointer-events:none; }
+        .play-line-label { position:absolute; right:10px; top:-16px; font-size:10px; color:var(--text); z-index:11; pointer-events:none; background:rgba(255,255,255,0.8); padding:1px 6px; border-radius:10px; border:1px solid rgba(0,0,0,0.1); }
+        .notes-layer { position:absolute; inset:0; z-index:5; pointer-events:none; }
+        .note-block {
+            position:absolute; border-radius:0; pointer-events:none;
+            box-shadow:0 1px 4px rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.4);
+            font-size:0; color:transparent; min-width:8px; transition:opacity 0.15s;
+        }
+        .note-block.playing { z-index:8; box-shadow:0 0 16px rgba(0,0,0,0.3); border-color:#fff; }
+        .no-file-hint { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#94a3b8; font-size:13px; z-index:2; pointer-events:none; }
+        .section-header { display:flex; align-items:center; gap:10px; margin-bottom:-12px; justify-content:space-between; }
+        .section-title { font-size:13px; font-weight:600; color:var(--text); }
+        .section-controls { display:flex; align-items:center; gap:8px; }
+        .wav-upload-area {
+            border:2.5px dashed #cbd5e1; border-radius:0; padding:12px 20px; text-align:center;
+            cursor:pointer; background:var(--surface); box-shadow:var(--shadow-sm); transition:0.2s;
+        }
+        .wav-upload-area:hover { border-color:#94a3b8; background:#f8fafc; }
+        .wav-upload-text { font-size:14px; font-weight:600; }
+        .wav-upload-sub { font-size:12px; color:var(--text-secondary); margin-top:2px; }
+        .sample-list { display:flex; flex-direction:column; gap:8px; }
+        .sample-item {
+            display:flex; align-items:center; background:#fff; border:1px solid var(--border-light);
+            border-radius:0; overflow:hidden; height:42px; box-shadow:var(--shadow-sm);
+        }
+        .sample-color {
+            width:25%; min-width:60px; background:#e2e8f0; display:flex; align-items:center;
+            justify-content:center; font-weight:700; font-size:14px; color:#fff; letter-spacing:0.5px;
+        }
+        .sample-info { flex:1; padding:0 14px; font-size:13px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .sample-delete { width:40px; text-align:center; cursor:pointer; color:#ef4444; font-weight:bold; font-size:18px; transition:0.2s; }
+        .sample-delete:hover { background:#fee2e2; }
+        @media (max-width:600px){ body{padding:16px 10px 30px;} .btn{padding:8px 18px;font-size:13px;} .visualizer-wrapper{min-height:160px;} }
+    </style>
+</head>
+<body>
+<div class="player-container" id="playerContainer">
+    <!-- 原始 MIDI 上传 -->
+    <div class="upload-area" id="uploadArea">
+        <span class="upload-icon">🎹</span>
+        <span class="upload-text">点击此处上传 MIDI</span>
+        <span class="upload-sub">支持 .mid / .midi 文件</span>
+        <div class="file-name" id="fileName"></div>
+    </div>
+    <input type="file" id="fileInput" accept=".mid,.midi">
+
+    <!-- 信息与图例 -->
+    <div class="info-legend-block">
+        <div class="info-row">
+            <span class="info-badge">轨道数: <strong id="trackCount">-</strong></span>
+            <span class="info-badge">音符数: <strong id="noteCount">-</strong></span>
+            <span class="info-badge">时长: <strong id="durationDisplay">-</strong></span>
+            <span class="info-badge">BPM: <strong id="bpmDisplay">-</strong></span>
+        </div>
+        <div class="legend-row" id="legendRow" style="display:none;">
+            <span class="legend-label">原始音色图例</span>
+            <span id="legendContent"></span>
+        </div>
+    </div>
+
+
+    <div class="section-header">
+        <span class="section-title">原始音色</span>
+        <div class="section-controls">
+            <button class="btn btn-play" id="btnPlay1" disabled><span id="btnPlayText1">播放</span></button>
+            <button class="btn btn-reset" id="btnReset1" disabled>重置</button>
+            <span class="time-display" id="timeDisplay1">00:00 / 00:00</span>
+        </div>
+    </div>
+    <div class="visualizer-wrapper" id="visualizerOriginal">
+        <div class="visualizer-inner">
+            <div class="grid-lines" id="gridLines1"></div>
+            <div class="play-line" id="playLine1"></div>
+            <span class="play-line-label">播放线</span>
+            <div class="notes-layer" id="notesLayer1"></div>
+            
+        </div>
+    </div>
+
+
+    <div class="section-header">
+        <span class="section-title">自定义音色</span>
+        <div class="section-controls">
+            <button class="btn btn-play" id="btnPlay2" disabled><span id="btnPlayText2">播放</span></button>
+            <button class="btn btn-reset" id="btnReset2" disabled>重置</button>
+            <span class="time-display" id="timeDisplay2">00:00 / 00:00</span>
+        </div>
+    </div>
+    <div class="visualizer-wrapper" id="visualizerCustom">
+        <div class="visualizer-inner">
+            <div class="grid-lines" id="gridLines2"></div>
+            <div class="play-line" id="playLine2"></div>
+            <span class="play-line-label">播放线</span>
+            <div class="notes-layer" id="notesLayer2"></div>
+
+        </div>
+    </div>
+
+    <!-- WAV 上传及采样列表 -->
+    <div class="wav-upload-area" id="wavUploadArea">
+        <span class="wav-upload-text">🎶 点击此处上传音符 (.wav)</span>
+        <div class="wav-upload-sub">默认基准 Do (C4) · 仅支持单个采样</div>
+    </div>
+    <input type="file" id="wavFileInput" accept=".wav">
+
+    <div class="sample-list" id="sampleList"></div>
+
+    <!-- 导出自定义音色按钮 -->
+    <button class="btn btn-export" id="btnExportCustom" disabled style="align-self:flex-start;">⬇️ 导出 MP3（自定义音色）</button>
+</div>
+
+<script>
+(() => {
+    // DOM 元素
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const fileNameEl = document.getElementById('fileName');
+    const legendRow = document.getElementById('legendRow');
+    const legendContent = document.getElementById('legendContent');
+    const trackCountEl = document.getElementById('trackCount');
+    const noteCountEl = document.getElementById('noteCount');
+    const durationDisplayEl = document.getElementById('durationDisplay');
+    const bpmDisplayEl = document.getElementById('bpmDisplay');
+    const wavUploadArea = document.getElementById('wavUploadArea');
+    const wavFileInput = document.getElementById('wavFileInput');
+    const sampleListDiv = document.getElementById('sampleList');
+    const btnExportCustom = document.getElementById('btnExportCustom');
+
+    // 瀑布1 DOM
+    const vis1 = document.getElementById('visualizerOriginal');
+    const layer1 = document.getElementById('notesLayer1');
+    const grid1 = document.getElementById('gridLines1');
+    const playLine1 = document.getElementById('playLine1');
+    const btnPlay1 = document.getElementById('btnPlay1');
+    const btnPlayText1 = document.getElementById('btnPlayText1');
+    const btnReset1 = document.getElementById('btnReset1');
+    const timeDisplay1 = document.getElementById('timeDisplay1');
+
+    // 瀑布2 DOM
+    const vis2 = document.getElementById('visualizerCustom');
+    const layer2 = document.getElementById('notesLayer2');
+    const grid2 = document.getElementById('gridLines2');
+    const playLine2 = document.getElementById('playLine2');
+    const btnPlay2 = document.getElementById('btnPlay2');
+    const btnPlayText2 = document.getElementById('btnPlayText2');
+    const btnReset2 = document.getElementById('btnReset2');
+    const timeDisplay2 = document.getElementById('timeDisplay2');
+
+    // 全局状态
+    let allNotes = [];
+    let customNotes = [];
+    let usedInstruments = new Map();
+    let totalDuration = 0;
+    let audioCtx = null;
+    let masterGain = null;
+    let customSamples = []; // 最多一个
+    const sampleColors = ['#e53e3e', '#dd6b20'];
+    const lookAhead = 3.4;
+
+    // 独立播放器状态
+    const player1 = { isPlaying: false, animationId: null, scheduledNotes: new Set(), activeOscillators: [], playStartTime: 0, logicalStartOffset: 0, currentLogicalTime: 0 };
+    const player2 = { isPlaying: false, animationId: null, scheduledNotes: new Set(), activeOscillators: [], playStartTime: 0, logicalStartOffset: 0, currentLogicalTime: 0 };
+
+    // 音色配置
+    function getInstrumentGroup(p) {
+        if(p<=7) return 'piano'; if(p<=15) return 'chromatic'; if(p<=23) return 'organ';
+        if(p<=31) return 'guitar'; if(p<=39) return 'bass'; if(p<=47) return 'strings';
+        if(p<=55) return 'ensemble'; if(p<=63) return 'brass'; if(p<=71) return 'reed';
+        if(p<=79) return 'pipe'; if(p<=87) return 'synth_lead'; if(p<=95) return 'synth_pad';
+        if(p<=103) return 'synth_fx'; if(p<=111) return 'ethnic'; if(p<=119) return 'percussive';
+        return 'sfx';
+    }
+    const instrumentConfig = {
+        piano:{color:'#e53e3e',name:'钢琴',waveform:'triangle',attack:0.008,decay:0.4,sustain:0.15},
+        chromatic:{color:'#dd6b20',name:'打击旋律',waveform:'square',attack:0.003,decay:0.25,sustain:0.05},
+        organ:{color:'#d69e2e',name:'风琴',waveform:'square',attack:0.04,decay:0.15,sustain:0.7},
+        guitar:{color:'#3182ce',name:'吉他',waveform:'triangle',attack:0.004,decay:0.55,sustain:0.08},
+        bass:{color:'#6b46c1',name:'贝斯',waveform:'sawtooth',attack:0.01,decay:0.35,sustain:0.25},
+        strings:{color:'#00a3c4',name:'弦乐',waveform:'sawtooth',attack:0.12,decay:0.3,sustain:0.6},
+        ensemble:{color:'#805ad5',name:'合奏',waveform:'sawtooth',attack:0.08,decay:0.25,sustain:0.55},
+        brass:{color:'#d69e2e',name:'铜管',waveform:'sawtooth',attack:0.03,decay:0.25,sustain:0.5},
+        reed:{color:'#e53e3e',name:'簧片',waveform:'sawtooth',attack:0.04,decay:0.3,sustain:0.45},
+        pipe:{color:'#38b2ac',name:'管乐',waveform:'triangle',attack:0.06,decay:0.2,sustain:0.5},
+        synth_lead:{color:'#d53f8c',name:'合成主音',waveform:'sawtooth',attack:0.015,decay:0.3,sustain:0.4},
+        synth_pad:{color:'#6b46c1',name:'合成铺底',waveform:'sine',attack:0.2,decay:0.4,sustain:0.7},
+        synth_fx:{color:'#e53e3e',name:'合成特效',waveform:'square',attack:0.01,decay:0.5,sustain:0.1},
+        ethnic:{color:'#c05621',name:'民族乐器',waveform:'triangle',attack:0.02,decay:0.35,sustain:0.3},
+        percussive:{color:'#718096',name:'打击音高',waveform:'square',attack:0.001,decay:0.15,sustain:0.02},
+        sfx:{color:'#a0aec0',name:'音效',waveform:'sine',attack:0.01,decay:0.5,sustain:0.2},
+    };
+    function getConfigForProgram(p){ return instrumentConfig[getInstrumentGroup(p)] || instrumentConfig.piano; }
+
+    // MIDI 解析（完整）
+    function parseMIDI(arrayBuffer) {
+        const data = new Uint8Array(arrayBuffer);
+        let offset = 0;
+        const readUint32 = () => { const v = (data[offset]<<24)|(data[offset+1]<<16)|(data[offset+2]<<8)|data[offset+3]; offset+=4; return v>>>0; };
+        const readUint16 = () => { const v = (data[offset]<<8)|data[offset+1]; offset+=2; return v; };
+        const readVarLen = () => { let v=0,b; do{ b=data[offset++]; v=(v<<7)|(b&0x7f); }while(b&0x80); return v; };
+        const headerId = String.fromCharCode(data[offset],data[offset+1],data[offset+2],data[offset+3]); offset+=4;
+        if(headerId!=='MThd') throw new Error('无效MIDI文件');
+        const headerLen=readUint32(); const format=readUint16(); const numTracks=readUint16(); const ticksPerQuarter=readUint16();
+        if(headerLen>6) offset+=(headerLen-6);
+        const allTrackEvents=[]; let totalTicks=0;
+        for(let t=0;t<numTracks;t++){
+            const trackId=String.fromCharCode(data[offset],data[offset+1],data[offset+2],data[offset+3]); offset+=4;
+            if(trackId!=='MTrk') throw new Error('轨道'+t+'缺少MTrk');
+            const trackLen=readUint32(); const trackEnd=offset+trackLen;
+            const events=[]; let runningStatus=null, absTicks=0;
+            while(offset<trackEnd){
+                const delta=readVarLen(); absTicks+=delta;
+                let status=data[offset];
+                if(status<0x80){ if(runningStatus===null){offset++; continue;} status=runningStatus; } else{ offset++; runningStatus=status; }
+                const eventType=status&0xf0, channel=status&0x0f;
+                if(status===0xff){ const metaType=data[offset++]; const len=readVarLen(); const start=offset;
+                    if(metaType===0x51 && len===3){ const tempo=(data[offset]<<16)|(data[offset+1]<<8)|data[offset+2]; events.push({type:'tempo',ticks:absTicks,tempo}); }
+                    offset=start+len; runningStatus=null; }
+                else if(status===0xf0||status===0xf7){ const len=readVarLen(); offset+=len; runningStatus=null; }
+                else if(eventType===0x80||eventType===0x90){ const pitch=data[offset++], vel=data[offset++];
+                    events.push({type:(eventType===0x90 && vel>0)?'noteOn':'noteOff', ticks:absTicks, channel, pitch, velocity:vel}); }
+                else if(eventType===0xc0){ events.push({type:'programChange',ticks:absTicks,channel,program:data[offset++]}); }
+                else if(eventType===0xb0){ events.push({type:'controlChange',ticks:absTicks,channel,controller:data[offset++],value:data[offset++]}); }
+                else if(eventType===0xe0){ const lsb=data[offset++], msb=data[offset++]; events.push({type:'pitchBend',ticks:absTicks,channel,value:(msb<<7)|lsb}); }
+                else if(eventType===0xd0||eventType===0xa0){ offset+=2; }
+                else{ if(offset<trackEnd) offset++; }
+            }
+            if(absTicks>totalTicks) totalTicks=absTicks;
+            allTrackEvents.push(events);
+            offset=trackEnd;
+        }
+        let allTempoEvents=[];
+        allTrackEvents.forEach(trk=>trk.forEach(e=>{ if(e.type==='tempo') allTempoEvents.push(e); }));
+        allTempoEvents.sort((a,b)=>a.ticks-b.ticks);
+        let currentTempo=500000, lastTick=0, lastSeconds=0;
+        const tickToSecondsMap=[{startTick:0,startSeconds:0,tempo:currentTempo}];
+        allTempoEvents.forEach(te=>{
+            const td=te.ticks-lastTick; const sd=(td/ticksPerQuarter)*(currentTempo/1000000);
+            lastSeconds+=sd; tickToSecondsMap.push({startTick:te.ticks,startSeconds:lastSeconds,tempo:te.tempo});
+            lastTick=te.ticks; currentTempo=te.tempo;
+        });
+        const finalS=lastSeconds+((totalTicks-lastTick)/ticksPerQuarter)*(currentTempo/1000000);
+        const tickToSeconds=(tick)=>{
+            let seg=tickToSecondsMap[0];
+            for(let i=tickToSecondsMap.length-1;i>=0;i--) if(tick>=tickToSecondsMap[i].startTick){ seg=tickToSecondsMap[i]; break; }
+            return seg.startSeconds+((tick-seg.startTick)/ticksPerQuarter)*(seg.tempo/1000000);
+        };
+        let channelProg=new Array(16).fill(0);
+        const noteStacks=Array.from({length:16},()=>({}));
+        const notes=[];
+        let allFlat=[]; allTrackEvents.forEach(trk=>allFlat.push(...trk));
+        allFlat.sort((a,b)=>a.ticks-b.ticks);
+        allFlat.forEach(ev=>{
+            if(ev.type==='programChange') channelProg[ev.channel]=ev.program;
+            else if(ev.type==='noteOn'){
+                const stack=noteStacks[ev.channel]; if(!stack[ev.pitch]) stack[ev.pitch]=[];
+                stack[ev.pitch].push({startTick:ev.ticks,velocity:ev.velocity,program:channelProg[ev.channel]});
+            } else if(ev.type==='noteOff'){
+                const stack=noteStacks[ev.channel];
+                if(stack[ev.pitch]&&stack[ev.pitch].length){
+                    const on=stack[ev.pitch].shift(); const st=tickToSeconds(on.startTick), et=tickToSeconds(ev.ticks);
+                    if(et>st && on.velocity>0) notes.push({startTime:st,endTime:et,pitch:ev.pitch,velocity:on.velocity,channel:ev.channel,program:on.program});
+                }
+            }
+        });
+        noteStacks.forEach((stack,ch)=>{
+            Object.keys(stack).forEach(p=>{
+                while(stack[p].length){
+                    const on=stack[p].shift(); const st=tickToSeconds(on.startTick);
+                    const et=Math.min(st+0.5,finalS);
+                    if(et>st && on.velocity>0) notes.push({startTime:st,endTime:et,pitch:parseInt(p),velocity:on.velocity,channel:ch,program:on.program});
+                }
+            });
+        });
+        notes.sort((a,b)=>a.startTime-b.startTime);
+        notes.forEach(n=>{ const config=getConfigForProgram(n.program); n.color=config.color; n.waveform=config.waveform; n.config=config; });
+        const instSet=new Map(); notes.forEach(n=>{ if(!instSet.has(n.program)) instSet.set(n.program,getConfigForProgram(n.program)); });
+        return {numTracks,totalSeconds:finalS,notes,instrumentSet:instSet};
+    }
+
+    // 音频初始化
+    function initAudio(){
+        if(!audioCtx){ audioCtx=new(window.AudioContext||window.webkitAudioContext)(); masterGain=audioCtx.createGain(); masterGain.gain.value=0.7; masterGain.connect(audioCtx.destination); }
+        if(audioCtx.state==='suspended') audioCtx.resume();
+    }
+
+    // 修改后的音符调度函数：使用拉伸代替循环
+    function scheduleNoteForPlayer(note, when, playerState){
+        if(!audioCtx||!masterGain) return;
+        const useSample = (note.customSampleIndex != null && customSamples[note.customSampleIndex]);
+        const vol = (note.velocity/127) * ((note.customVolumeScale||100)/100);
+        const duration = Math.max(0.03, note.endTime - note.startTime);
+        const gain = audioCtx.createGain(); gain.connect(masterGain);
+        let sourceNode;
+        if(useSample){
+            const sample = customSamples[note.customSampleIndex];
+            const src = audioCtx.createBufferSource();
+            src.buffer = sample.buffer;
+            // 不再循环
+            const base = sample.basePitch||60, target = note.pitch + (note.customPitchOffset||0);
+            let rate = Math.pow(2, (target-base)/12); // 音高调整速率
+            const sampleDuration = sample.buffer.duration;
+            // 如果音符时长大于采样时长，计算拉伸比例（减慢）
+            if (duration > sampleDuration && sampleDuration > 0) {
+                const stretchFactor = sampleDuration / duration;
+                rate *= stretchFactor;
+            }
+            src.playbackRate.value = rate;
+            gain.gain.setValueAtTime(vol, when);
+            gain.gain.setValueAtTime(0.001, when+duration+0.05);
+            src.connect(gain);
+            src.start(when);
+            src.stop(when+duration);
+            sourceNode = src;
+        } else {
+            const config = note.config || getConfigForProgram(note.program);
+            const osc = audioCtx.createOscillator(); osc.type = config.waveform;
+            const freq = 440*Math.pow(2,(note.pitch+(note.customPitchOffset||0)-69)/12);
+            osc.frequency.setValueAtTime(freq, when);
+            gain.gain.setValueAtTime(0,when);
+            gain.gain.linearRampToValueAtTime(vol*0.9, when+0.005);
+            gain.gain.setValueAtTime(vol*0.9, when+duration-0.03);
+            gain.gain.linearRampToValueAtTime(0.001, when+duration);
+            osc.connect(gain); osc.start(when); osc.stop(when+duration+0.05);
+            sourceNode = osc;
+        }
+        playerState.activeOscillators.push({source:sourceNode, gain:gain});
+        const cleanTime = (when+duration+0.1)*1000;
+        setTimeout(() => {
+            const idx = playerState.activeOscillators.findIndex(r => r.source === sourceNode);
+            if(idx >= 0) playerState.activeOscillators.splice(idx, 1);
+        }, Math.max(100, cleanTime - performance.now()));
+    }
+
+    function stopPlayerSound(playerState){
+        playerState.activeOscillators.forEach(r => {
+            try { r.source.stop(); } catch(e) {}
+            try { r.source.disconnect(); } catch(e) {}
+            try { r.gain.disconnect(); } catch(e) {}
+        });
+        playerState.activeOscillators = [];
+        playerState.scheduledNotes.clear();
+    }
+
+    function buildGridLines(container){ container.innerHTML=''; for(let i=1;i<8;i++){ const l=document.createElement('div'); l.className='grid-line'; l.style.top=(i/8*100)+'%'; container.appendChild(l); } }
+    function updateNoteBlocks(layer, wrapper, notesArray, currentTime, isCustom){
+        const h = wrapper.clientHeight, w = wrapper.clientWidth;
+        if(h<=0||w<=0) return;
+        const playY = 10, bottom = h-4, usable = bottom-playY;
+        const visible = [];
+        const future = currentTime + lookAhead;
+        notesArray.forEach((n,i) => { if(n.endTime >= currentTime-0.1 && n.startTime <= future+0.5) visible.push({...n, _idx:i}); });
+        if(isCustom && visible.length === 0){ layer.innerHTML = ''; return; }
+        let minP=127, maxP=0;
+        if(visible.length){ visible.forEach(n => { if(n.pitch<minP) minP=n.pitch; if(n.pitch>maxP) maxP=n.pitch; }); }
+        else{ minP=36; maxP=96; }
+        const pMin = Math.max(0, minP-4), pMax = Math.min(127, maxP+4), range = pMax-pMin || 12;
+        const existing = new Map();
+        [...layer.children].forEach(c => { const idx = parseInt(c.dataset.noteIndex); if(!isNaN(idx)) existing.set(idx, c); });
+        const used = new Set();
+        visible.forEach(note => {
+            const idx = note._idx; used.add(idx);
+            let block = existing.get(idx);
+            const startY = playY + usable * ((note.startTime - currentTime) / lookAhead);
+            const endY = playY + usable * ((note.endTime - currentTime) / lookAhead);
+            const csY = Math.max(-30, Math.min(h+30, startY));
+            const ceY = Math.max(-30, Math.min(h+30, endY));
+            const bh = Math.max(4, ceY-csY);
+            const xFrac = (note.pitch - pMin) / range;
+            const xPos = xFrac * (w-20) + 4;
+            const bw = Math.max(8, w/range*0.8);
+            const isCurrentlyPlaying = (note.startTime <= currentTime && note.endTime > currentTime);
+            if(!block){
+                block = document.createElement('div'); block.className = 'note-block';
+                block.dataset.noteIndex = idx;
+                block.style.backgroundColor = isCustom ? (customSamples[note.customSampleIndex]?.color || '#aaa') : note.color;
+                layer.appendChild(block);
+            } else {
+                if(!isCustom) block.style.backgroundColor = note.color;
+            }
+            if(isCurrentlyPlaying) block.classList.add('playing');
+            else block.classList.remove('playing');
+            block.style.left = xPos+'px'; block.style.top = csY+'px';
+            block.style.width = bw+'px'; block.style.height = bh+'px';
+            block.style.opacity = (csY > h+20 || ceY < playY-20) ? '0.15' : '1';
+        });
+        existing.forEach((block, idx) => {
+            if(!used.has(idx)){
+                block.style.opacity = '0';
+                setTimeout(() => { if(block.parentNode) block.remove(); }, 250);
+            }
+        });
+    }
+
+    function refreshWaterfall1(){ updateNoteBlocks(layer1, vis1, allNotes, player1.currentLogicalTime, false); }
+    function refreshWaterfall2(){ updateNoteBlocks(layer2, vis2, customNotes, player2.currentLogicalTime, true); }
+
+    function animationLoop1(){
+        if(!player1.isPlaying || !audioCtx) return;
+        const now = audioCtx.currentTime;
+        player1.currentLogicalTime = now - player1.playStartTime + player1.logicalStartOffset;
+        if(player1.currentLogicalTime >= totalDuration && totalDuration > 0){
+            pausePlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1);
+            player1.currentLogicalTime = totalDuration;
+            refreshWaterfall1(); updateTimeDisplay(player1.currentLogicalTime, timeDisplay1);
+            return;
+        }
+        refreshWaterfall1();
+        const scheduleWindow = 0.08;
+        for(let i=0; i<allNotes.length; i++){
+            if(player1.scheduledNotes.has(i)) continue;
+            const n = allNotes[i];
+            if(n.startTime <= player1.currentLogicalTime + scheduleWindow && n.startTime > player1.currentLogicalTime - 0.02){
+                const delay = n.startTime - player1.currentLogicalTime;
+                if(delay >= -0.01) scheduleNoteForPlayer(n, audioCtx.currentTime + Math.max(0, delay), player1);
+                player1.scheduledNotes.add(i);
+            }
+            if(n.startTime > player1.currentLogicalTime + scheduleWindow + 0.1) break;
+        }
+        updateTimeDisplay(player1.currentLogicalTime, timeDisplay1);
+        player1.animationId = requestAnimationFrame(animationLoop1);
+    }
+    function animationLoop2(){
+        if(!player2.isPlaying || !audioCtx) return;
+        const now = audioCtx.currentTime;
+        player2.currentLogicalTime = now - player2.playStartTime + player2.logicalStartOffset;
+        if(player2.currentLogicalTime >= totalDuration && totalDuration > 0){
+            pausePlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2);
+            player2.currentLogicalTime = totalDuration;
+            refreshWaterfall2(); updateTimeDisplay(player2.currentLogicalTime, timeDisplay2);
+            return;
+        }
+        refreshWaterfall2();
+        const scheduleWindow = 0.08;
+        for(let i=0; i<customNotes.length; i++){
+            if(player2.scheduledNotes.has(i)) continue;
+            const n = customNotes[i];
+            if(n.startTime <= player2.currentLogicalTime + scheduleWindow && n.startTime > player2.currentLogicalTime - 0.02){
+                const delay = n.startTime - player2.currentLogicalTime;
+                if(delay >= -0.01) scheduleNoteForPlayer(n, audioCtx.currentTime + Math.max(0, delay), player2);
+                player2.scheduledNotes.add(i);
+            }
+            if(n.startTime > player2.currentLogicalTime + scheduleWindow + 0.1) break;
+        }
+        updateTimeDisplay(player2.currentLogicalTime, timeDisplay2);
+        player2.animationId = requestAnimationFrame(animationLoop2);
+    }
+    function updateTimeDisplay(time, element){
+        const ct = Math.max(0, time);
+        const cm = Math.floor(ct/60), cs = Math.floor(ct%60);
+        const tm = Math.floor(totalDuration/60), ts = Math.floor(totalDuration%60);
+        element.textContent = `${String(cm).padStart(2,'0')}:${String(cs).padStart(2,'0')} / ${String(tm).padStart(2,'0')}:${String(ts).padStart(2,'0')}`;
+    }
+
+    function startPlayer(playerState, btn, btnText, line, timeDisp){
+        if(!allNotes.length) return;
+        initAudio();
+        if(audioCtx.state === 'suspended') audioCtx.resume().then(() => startPlayerInternal(playerState, btn, btnText, line, timeDisp));
+        else startPlayerInternal(playerState, btn, btnText, line, timeDisp);
+    }
+    function startPlayerInternal(playerState, btn, btnText, line, timeDisp){
+        if(playerState.isPlaying) return;
+        playerState.isPlaying = true;
+        playerState.scheduledNotes.clear();
+        stopPlayerSound(playerState);
+        if(playerState.currentLogicalTime >= totalDuration && totalDuration > 0){
+            playerState.currentLogicalTime = 0;
+            playerState.logicalStartOffset = 0;
+        }
+        playerState.playStartTime = audioCtx.currentTime;
+        playerState.logicalStartOffset = playerState.currentLogicalTime;
+        btn.classList.add('paused-state');
+        btnText.textContent = '暂停';
+        line.style.background = '#22c55e';
+        if(playerState === player1) { refreshWaterfall1(); player1.animationId = requestAnimationFrame(animationLoop1); }
+        else { refreshWaterfall2(); player2.animationId = requestAnimationFrame(animationLoop2); }
+    }
+    function pausePlayer(playerState, btn, btnText, line, timeDisp){
+        if(!playerState.isPlaying) return;
+        playerState.isPlaying = false;
+        if(playerState.animationId) { cancelAnimationFrame(playerState.animationId); playerState.animationId = null; }
+        if(audioCtx) playerState.currentLogicalTime = audioCtx.currentTime - playerState.playStartTime + playerState.logicalStartOffset;
+        playerState.logicalStartOffset = playerState.currentLogicalTime;
+        stopPlayerSound(playerState);
+        playerState.scheduledNotes.clear();
+        btn.classList.remove('paused-state');
+        btnText.textContent = '播放';
+        line.style.background = '#f59e0b';
+        if(playerState === player1) refreshWaterfall1();
+        else refreshWaterfall2();
+        updateTimeDisplay(playerState.currentLogicalTime, timeDisp);
+    }
+    function resetPlayer(playerState, btn, btnText, line, timeDisp){
+        if(playerState.isPlaying){ playerState.isPlaying = false; if(playerState.animationId) cancelAnimationFrame(playerState.animationId); }
+        stopPlayerSound(playerState);
+        playerState.scheduledNotes.clear();
+        playerState.currentLogicalTime = 0;
+        playerState.logicalStartOffset = 0;
+        playerState.playStartTime = 0;
+        btn.classList.remove('paused-state');
+        btnText.textContent = '播放';
+        line.style.background = '#1e293b';
+        if(playerState === player1) refreshWaterfall1();
+        else refreshWaterfall2();
+        updateTimeDisplay(0, timeDisp);
+    }
+
+    // 加载MIDI并同步
+    function loadMIDIFile(file){
+        fileNameEl.textContent = file.name;
+        uploadArea.classList.add('has-file');
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try{
+                const parsed = parseMIDI(e.target.result);
+                allNotes = parsed.notes; totalDuration = parsed.totalSeconds; usedInstruments = parsed.instrumentSet;
+                allNotes.forEach((n,i) => n._index = i);
+                buildCustomNotes();
+                trackCountEl.textContent = parsed.numTracks; noteCountEl.textContent = allNotes.length;
+                const dm = Math.floor(totalDuration/60), ds = Math.floor(totalDuration%60);
+                durationDisplayEl.textContent = dm+'分'+ds+'秒';
+                bpmDisplayEl.textContent = '~'+(Math.round((allNotes.length>0?60/(totalDuration/Math.max(1,allNotes.length/4)):120)/5)*5);
+                btnPlay1.disabled=false; btnReset1.disabled=false;
+                btnPlay2.disabled=false; btnReset2.disabled=false;
+                updateLegend();
+                resetPlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1);
+                resetPlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2);
+                layer1.innerHTML=''; layer2.innerHTML='';
+                buildGridLines(grid1); buildGridLines(grid2);
+                refreshWaterfall1(); refreshWaterfall2();
+            } catch(err){ alert('MIDI解析失败: '+err.message); resetAll(); }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+    function buildCustomNotes(){
+        const sampleIndex = customSamples.length > 0 ? 0 : null;
+        customNotes = allNotes.map((note, i) => {
+            const newNote = {...note, _index: i};
+            newNote.customSampleIndex = sampleIndex;
+            newNote.customPitchOffset = 0;
+            newNote.customVolumeScale = 100;
+            return newNote;
+        });
+    }
+    function updateLegend(){
+        if(usedInstruments.size===0){ legendRow.style.display='none'; return; }
+        legendRow.style.display='flex';
+        let html=''; let count=0;
+        usedInstruments.forEach(cfg=>{ if(count<12) html+=`<span class="legend-item"><span class="legend-dot" style="background:${cfg.color};"></span>${cfg.name}</span>`; count++; });
+        if(count>12) html+='<span class="legend-item">…</span>';
+        legendContent.innerHTML=html;
+    }
+    function resetAll(){
+        stopPlayerSound(player1); stopPlayerSound(player2);
+        if(player1.isPlaying){ player1.isPlaying=false; if(player1.animationId) cancelAnimationFrame(player1.animationId); }
+        if(player2.isPlaying){ player2.isPlaying=false; if(player2.animationId) cancelAnimationFrame(player2.animationId); }
+        allNotes=[]; customNotes=[]; usedInstruments.clear(); totalDuration=0;
+        player1.currentLogicalTime=0; player2.currentLogicalTime=0;
+        layer1.innerHTML=''; layer2.innerHTML='';
+        fileNameEl.textContent=''; uploadArea.classList.remove('has-file');
+        btnPlay1.disabled=true; btnReset1.disabled=true;
+        btnPlay2.disabled=true; btnReset2.disabled=true;
+        btnPlay1.classList.remove('paused-state'); btnPlayText1.textContent='播放';
+        btnPlay2.classList.remove('paused-state'); btnPlayText2.textContent='播放';
+        playLine1.style.background='#1e293b'; playLine2.style.background='#1e293b';
+        trackCountEl.textContent='-'; noteCountEl.textContent='-'; durationDisplayEl.textContent='-'; bpmDisplayEl.textContent='-';
+        timeDisplay1.textContent='00:00 / 00:00'; timeDisplay2.textContent='00:00 / 00:00';
+        legendRow.style.display='none';
+        btnExportCustom.disabled = true;
+    }
+
+    // 采样管理（限一个）
+    function addSample(buffer, name){
+        if(customSamples.length >= 1){
+            alert('暂不支持多音色');
+            return;
+        }
+        const idx = customSamples.length;
+        customSamples.push({buffer, fileName: name, basePitch: 60, color: sampleColors[idx%sampleColors.length]});
+        renderSamples();
+        if(allNotes.length > 0){
+            buildCustomNotes();
+            refreshWaterfall2();
+        }
+    }
+    function removeSample(idx){
+        customSamples.splice(idx,1);
+        if(allNotes.length > 0){
+            buildCustomNotes();
+            refreshWaterfall2();
+        }
+        renderSamples();
+    }
+    function renderSamples(){
+        sampleListDiv.innerHTML = '';
+        customSamples.forEach((s,i) => {
+            const div = document.createElement('div'); div.className = 'sample-item';
+            div.innerHTML = `<div class="sample-color" style="background:${s.color}">#Note${i}</div>
+                     <div class="sample-info">${s.fileName} (基准:Do/C4)</div>
+                     <div class="sample-delete">✕</div>`;
+            div.querySelector('.sample-delete').onclick = (e) => { e.stopPropagation(); removeSample(i); };
+            sampleListDiv.appendChild(div);
+        });
+    }
+
+    btnExportCustom.addEventListener('click', () => {
+        alert('暂不支持，请手动录屏');
+    });
+    btnExportCustom.disabled = true;
+
+    uploadArea.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => { if(fileInput.files[0]){ loadMIDIFile(fileInput.files[0]); fileInput.value=''; } });
+    btnPlay1.addEventListener('click', () => { if(!allNotes.length) return; initAudio(); player1.isPlaying ? pausePlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1) : startPlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1); });
+    btnReset1.addEventListener('click', () => resetPlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1));
+    btnPlay2.addEventListener('click', () => { if(!customNotes.length) return; initAudio(); player2.isPlaying ? pausePlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2) : startPlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2); });
+    btnReset2.addEventListener('click', () => resetPlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2));
+
+    document.addEventListener('keydown', e => {
+        if(e.code === 'Space' && e.target === document.body){
+            e.preventDefault();
+            if(allNotes.length){
+                initAudio();
+                player1.isPlaying ? pausePlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1) : startPlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1);
+            }
+        }
+    });
+
+    wavUploadArea.addEventListener('click', () => wavFileInput.click());
+    wavFileInput.addEventListener('change', () => {
+        const file = wavFileInput.files[0]; if(!file) return;
+        if(customSamples.length >= 1){
+            alert('暂不支持多音色');
+            wavFileInput.value = '';
+            return;
+        }
+        initAudio();
+        const reader = new FileReader();
+        reader.onload = (e) => audioCtx.decodeAudioData(e.target.result).then(buf => addSample(buf, file.name)).catch(() => alert('WAV解码失败'));
+        reader.readAsArrayBuffer(file);
+        wavFileInput.value = '';
+    });
+
+    window.addEventListener('resize', () => { buildGridLines(grid1); buildGridLines(grid2); if(allNotes.length){ refreshWaterfall1(); refreshWaterfall2(); } });
+
+    buildGridLines(grid1); buildGridLines(grid2);
+    resetAll();
+})();
+</script>
+</body>
+</html>
