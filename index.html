@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>音mad快速制作</title>
-    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js">
+    </script>
     <style>
         :root {
             --bg: #f5f6f8;
@@ -99,12 +100,12 @@
         .sample-info { flex:1; padding:0 14px; font-size:13px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .sample-delete { width:40px; text-align:center; cursor:pointer; color:#ef4444; font-weight:bold; font-size:18px; transition:0.2s; }
         .sample-delete:hover { background:#fee2e2; }
+        .footer-note { text-align:center; color:#9ca3af; font-size:12px; margin-top:4px; }
         @media (max-width:600px){ body{padding:16px 10px 30px;} .btn{padding:8px 18px;font-size:13px;} .visualizer-wrapper{min-height:160px;} }
     </style>
 </head>
 <body>
 <div class="player-container" id="playerContainer">
-    <!-- 原始 MIDI 上传 -->
     <div class="upload-area" id="uploadArea">
         <span class="upload-icon">🎹</span>
         <span class="upload-text">点击此处上传 MIDI</span>
@@ -113,7 +114,6 @@
     </div>
     <input type="file" id="fileInput" accept=".mid,.midi">
 
-    <!-- 信息与图例 -->
     <div class="info-legend-block">
         <div class="info-row">
             <span class="info-badge">轨道数: <strong id="trackCount">-</strong></span>
@@ -126,7 +126,6 @@
             <span id="legendContent"></span>
         </div>
     </div>
-
 
     <div class="section-header">
         <span class="section-title">原始音色</span>
@@ -142,10 +141,8 @@
             <div class="play-line" id="playLine1"></div>
             <span class="play-line-label">播放线</span>
             <div class="notes-layer" id="notesLayer1"></div>
-            
         </div>
     </div>
-
 
     <div class="section-header">
         <span class="section-title">自定义音色</span>
@@ -161,11 +158,9 @@
             <div class="play-line" id="playLine2"></div>
             <span class="play-line-label">播放线</span>
             <div class="notes-layer" id="notesLayer2"></div>
-
         </div>
     </div>
 
-    <!-- WAV 上传及采样列表 -->
     <div class="wav-upload-area" id="wavUploadArea">
         <span class="wav-upload-text">🎶 点击此处上传音符 (.wav)</span>
         <div class="wav-upload-sub">默认基准 Do (C4) · 仅支持单个采样</div>
@@ -174,13 +169,12 @@
 
     <div class="sample-list" id="sampleList"></div>
 
-    <!-- 导出自定义音色按钮 -->
     <button class="btn btn-export" id="btnExportCustom" disabled style="align-self:flex-start;">⬇️ 导出 MP3（自定义音色）</button>
+    <div class="footer-note">player233lol制作 | 反馈634832107</div>
 </div>
 
 <script>
 (() => {
-    // DOM 元素
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
     const fileNameEl = document.getElementById('fileName');
@@ -195,7 +189,6 @@
     const sampleListDiv = document.getElementById('sampleList');
     const btnExportCustom = document.getElementById('btnExportCustom');
 
-    // 瀑布1 DOM
     const vis1 = document.getElementById('visualizerOriginal');
     const layer1 = document.getElementById('notesLayer1');
     const grid1 = document.getElementById('gridLines1');
@@ -205,7 +198,6 @@
     const btnReset1 = document.getElementById('btnReset1');
     const timeDisplay1 = document.getElementById('timeDisplay1');
 
-    // 瀑布2 DOM
     const vis2 = document.getElementById('visualizerCustom');
     const layer2 = document.getElementById('notesLayer2');
     const grid2 = document.getElementById('gridLines2');
@@ -215,22 +207,19 @@
     const btnReset2 = document.getElementById('btnReset2');
     const timeDisplay2 = document.getElementById('timeDisplay2');
 
-    // 全局状态
     let allNotes = [];
     let customNotes = [];
     let usedInstruments = new Map();
     let totalDuration = 0;
     let audioCtx = null;
     let masterGain = null;
-    let customSamples = []; // 最多一个
+    let customSamples = [];
     const sampleColors = ['#e53e3e', '#dd6b20'];
     const lookAhead = 3.4;
 
-    // 独立播放器状态
     const player1 = { isPlaying: false, animationId: null, scheduledNotes: new Set(), activeOscillators: [], playStartTime: 0, logicalStartOffset: 0, currentLogicalTime: 0 };
     const player2 = { isPlaying: false, animationId: null, scheduledNotes: new Set(), activeOscillators: [], playStartTime: 0, logicalStartOffset: 0, currentLogicalTime: 0 };
 
-    // 音色配置
     function getInstrumentGroup(p) {
         if(p<=7) return 'piano'; if(p<=15) return 'chromatic'; if(p<=23) return 'organ';
         if(p<=31) return 'guitar'; if(p<=39) return 'bass'; if(p<=47) return 'strings';
@@ -259,7 +248,6 @@
     };
     function getConfigForProgram(p){ return instrumentConfig[getInstrumentGroup(p)] || instrumentConfig.piano; }
 
-    // MIDI 解析（完整）
     function parseMIDI(arrayBuffer) {
         const data = new Uint8Array(arrayBuffer);
         let offset = 0;
@@ -346,13 +334,11 @@
         return {numTracks,totalSeconds:finalS,notes,instrumentSet:instSet};
     }
 
-    // 音频初始化
     function initAudio(){
         if(!audioCtx){ audioCtx=new(window.AudioContext||window.webkitAudioContext)(); masterGain=audioCtx.createGain(); masterGain.gain.value=0.7; masterGain.connect(audioCtx.destination); }
         if(audioCtx.state==='suspended') audioCtx.resume();
     }
 
-    // 修改后的音符调度函数：使用拉伸代替循环
     function scheduleNoteForPlayer(note, when, playerState){
         if(!audioCtx||!masterGain) return;
         const useSample = (note.customSampleIndex != null && customSamples[note.customSampleIndex]);
@@ -364,11 +350,9 @@
             const sample = customSamples[note.customSampleIndex];
             const src = audioCtx.createBufferSource();
             src.buffer = sample.buffer;
-            // 不再循环
             const base = sample.basePitch||60, target = note.pitch + (note.customPitchOffset||0);
-            let rate = Math.pow(2, (target-base)/12); // 音高调整速率
+            let rate = Math.pow(2, (target-base)/12);
             const sampleDuration = sample.buffer.duration;
-            // 如果音符时长大于采样时长，计算拉伸比例（减慢）
             if (duration > sampleDuration && sampleDuration > 0) {
                 const stretchFactor = sampleDuration / duration;
                 rate *= stretchFactor;
@@ -411,6 +395,7 @@
     }
 
     function buildGridLines(container){ container.innerHTML=''; for(let i=1;i<8;i++){ const l=document.createElement('div'); l.className='grid-line'; l.style.top=(i/8*100)+'%'; container.appendChild(l); } }
+
     function updateNoteBlocks(layer, wrapper, notesArray, currentTime, isCustom){
         const h = wrapper.clientHeight, w = wrapper.clientWidth;
         if(h<=0||w<=0) return;
@@ -573,7 +558,6 @@
         updateTimeDisplay(0, timeDisp);
     }
 
-    // 加载MIDI并同步
     function loadMIDIFile(file){
         fileNameEl.textContent = file.name;
         uploadArea.classList.add('has-file');
@@ -637,7 +621,6 @@
         btnExportCustom.disabled = true;
     }
 
-    // 采样管理（限一个）
     function addSample(buffer, name){
         if(customSamples.length >= 1){
             alert('暂不支持多音色');
