@@ -655,7 +655,7 @@
 
     btnExportCustom.addEventListener('click', async () => {
         if (!customNotes.length) return;
-        btnExportCustom.disabled = true;
+
         btnExportCustom.textContent = '渲染中…';
 
         try {
@@ -727,7 +727,6 @@
         alert('导出失败: ' + err.message);
     }
 
-    btnExportCustom.disabled = false;
     btnExportCustom.textContent = '⬇️ 导出 MP3（自定义音色）';
     });
 
