@@ -163,7 +163,7 @@
 
     <div class="wav-upload-area" id="wavUploadArea">
         <span class="wav-upload-text">🎶 点击此处上传音符 (.wav)</span>
-        <div class="wav-upload-sub">默认基准 Do (C4) · 仅支持单个采样</div>
+        <div class="wav-upload-sub">默认基准 Do (C4) · 最多支持10个采样</div>
     </div>
     <input type="file" id="wavFileInput" accept=".wav">
 
@@ -214,7 +214,7 @@
     let audioCtx = null;
     let masterGain = null;
     let customSamples = [];
-    const sampleColors = ['#e53e3e', '#dd6b20'];
+    const sampleColors = ['#e53e3e','#dd6b20','#d69e2e','#3182ce','#6b46c1','#00a3c4','#805ad5','#38b2ac','#d53f8c','#c05621'];
     const lookAhead = 3.4;
 
     const player1 = { isPlaying: false, animationId: null, scheduledNotes: new Set(), activeOscillators: [], playStartTime: 0, logicalStartOffset: 0, currentLogicalTime: 0 };
@@ -574,6 +574,7 @@
                 bpmDisplayEl.textContent = '~'+(Math.round((allNotes.length>0?60/(totalDuration/Math.max(1,allNotes.length/4)):120)/5)*5);
                 btnPlay1.disabled=false; btnReset1.disabled=false;
                 btnPlay2.disabled=false; btnReset2.disabled=false;
+                btnExportCustom.disabled = false;
                 updateLegend();
                 resetPlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1);
                 resetPlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2);
@@ -612,6 +613,7 @@
         fileNameEl.textContent=''; uploadArea.classList.remove('has-file');
         btnPlay1.disabled=true; btnReset1.disabled=true;
         btnPlay2.disabled=true; btnReset2.disabled=true;
+        btnExportCustom.disabled = true;
         btnPlay1.classList.remove('paused-state'); btnPlayText1.textContent='播放';
         btnPlay2.classList.remove('paused-state'); btnPlayText2.textContent='播放';
         playLine1.style.background='#1e293b'; playLine2.style.background='#1e293b';
@@ -621,8 +623,8 @@
     }
 
     function addSample(buffer, name){
-        if(customSamples.length >= 1){
-            alert('暂不支持多音色');
+        if(customSamples.length >= 10){
+            alert('最多支持10个音色');
             return;
         }
         const idx = customSamples.length;
@@ -655,22 +657,19 @@
 
     btnExportCustom.addEventListener('click', async () => {
         if (!customNotes.length) return;
-
+        btnExportCustom.disabled = true;
         btnExportCustom.textContent = '渲染中…';
-
         try {
             const offlineCtx = new OfflineAudioContext(2, 44100 * Math.ceil(totalDuration + 1), 44100);
             const masterGain = offlineCtx.createGain();
             masterGain.gain.value = 0.9;
             masterGain.connect(offlineCtx.destination);
-
             customNotes.forEach(note => {
                 const when = note.startTime;
                 const dur = Math.max(0.1, note.endTime - note.startTime);
                 const vol = (note.velocity / 127) * ((note.customVolumeScale || 100) / 100);
                 const gain = offlineCtx.createGain();
                 gain.connect(masterGain);
-
                 if (note.customSampleIndex != null && customSamples[note.customSampleIndex]) {
                     const sample = customSamples[note.customSampleIndex];
                     const src = offlineCtx.createBufferSource();
@@ -702,32 +701,30 @@
                     osc.start(when);
                     osc.stop(when + dur + 0.05);
                 }
-        });
-
-        const renderedBuffer = await offlineCtx.startRendering();
-
-        const mp3encoder = new lamejs.Mp3Encoder(2, 44100, 128);
-        const left = renderedBuffer.getChannelData(0);
-        const right = renderedBuffer.getChannelData(1);
-        const samples = new Int16Array(left.length * 2);
-        for (let i = 0; i < left.length; i++) {
-            samples[i * 2] = Math.max(-32768, Math.min(32767, left[i] * 32767));
-            samples[i * 2 + 1] = Math.max(-32768, Math.min(32767, right[i] * 32767));
+            });
+            const renderedBuffer = await offlineCtx.startRendering();
+            const mp3encoder = new lamejs.Mp3Encoder(2, 44100, 128);
+            const left = renderedBuffer.getChannelData(0);
+            const right = renderedBuffer.getChannelData(1);
+            const samples = new Int16Array(left.length * 2);
+            for (let i = 0; i < left.length; i++) {
+                samples[i * 2] = Math.max(-32768, Math.min(32767, left[i] * 32767));
+                samples[i * 2 + 1] = Math.max(-32768, Math.min(32767, right[i] * 32767));
+            }
+            const mp3Data = mp3encoder.encodeBuffer(samples);
+            const endData = mp3encoder.flush();
+            const blob = new Blob([mp3Data, endData], { type: 'audio/mp3' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'custom_midi.mp3';
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            alert('导出失败: ' + err.message);
         }
-        const mp3Data = mp3encoder.encodeBuffer(samples);
-        const endData = mp3encoder.flush();
-        const blob = new Blob([mp3Data, endData], { type: 'audio/mp3' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'custom_midi.mp3';
-        a.click();
-        URL.revokeObjectURL(url);
-    } catch (err) {
-        alert('导出失败: ' + err.message);
-    }
-
-    btnExportCustom.textContent = '⬇️ 导出 MP3（自定义音色）';
+        btnExportCustom.disabled = false;
+        btnExportCustom.textContent = '⬇️ 导出 MP3（自定义音色）';
     });
 
     uploadArea.addEventListener('click', () => fileInput.click());
@@ -750,8 +747,8 @@
     wavUploadArea.addEventListener('click', () => wavFileInput.click());
     wavFileInput.addEventListener('change', () => {
         const file = wavFileInput.files[0]; if(!file) return;
-        if(customSamples.length >= 1){
-            alert('暂不支持多音色');
+        if(customSamples.length >= 10){
+            alert('最多支持10个音色');
             wavFileInput.value = '';
             return;
         }
