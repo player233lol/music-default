@@ -658,7 +658,7 @@
     btnExportCustom.addEventListener('click', async () => {
         if (!customNotes.length) return;
         btnExportCustom.disabled = true;
-        btnExportCustom.textContent = '渲染中…';
+        btnExportCustom.textContent = '渲染中...  这可能需要一些时间...';
         try {
             const offlineCtx = new OfflineAudioContext(2, 44100 * Math.ceil(totalDuration + 1), 44100);
             const masterGain = offlineCtx.createGain();
