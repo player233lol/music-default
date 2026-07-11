@@ -126,7 +126,7 @@
             padding:8px; border-radius:4px;
         }
         .sample-picker-box .cancel-btn:hover { background:#f1f5f9; }
-        .btn-group { display:flex; gap:8px; }
+        .btn-group { display:flex; gap:8px; flex-wrap:wrap; }
         @media (max-width:600px){ body{padding:16px 10px 30px;} .btn{padding:8px 18px;font-size:13px;} .visualizer-wrapper{min-height:160px;} }
     </style>
 </head>
@@ -305,7 +305,7 @@
                     fileName: s.fileName,
                     color: s.color,
                     basePitch: s.basePitch,
-                    bufferBase64: s.buffer ? arrayBufferToBase64(s.buffer) : null
+                    bufferBase64: s.bufferBase64 || null
                 })),
                 customNotesAssign: customNotes.map(n => ({
                     customSampleIndex: n.customSampleIndex,
@@ -1032,32 +1032,16 @@
             state.samples.forEach((s, idx) => {
                 const color = s.color || sampleColors[idx % sampleColors.length];
                 let buffer = null;
-                if (s.bufferBase64) {
-                    try {
-                        const buf = base64ToArrayBuffer(s.bufferBase64);
-                        // 解码为AudioBuffer，但这里不能同步解码，所以先存起来，稍后异步解码
-                        // 我们存储bufferBase64，在播放时再解码？但播放时需要AudioBuffer。我们可以在恢复时异步解码所有采样。
-                        // 这里我们只存元数据，稍后解码。
-                        customSamples.push({
-                            fileName: s.fileName,
-                            color: color,
-                            basePitch: s.basePitch || 60,
-                            bufferBase64: s.bufferBase64,
-                            buffer: null // 待解码
-                        });
-                    } catch(e) { /* ignore */ }
-                } else {
-                    customSamples.push({
-                        fileName: s.fileName,
-                        color: color,
-                        basePitch: s.basePitch || 60,
-                        bufferBase64: null,
-                        buffer: null
-                    });
-                }
+                let bufferBase64 = s.bufferBase64 || null;
+                customSamples.push({
+                    fileName: s.fileName,
+                    color: color,
+                    basePitch: s.basePitch || 60,
+                    bufferBase64: bufferBase64,
+                    buffer: null
+                });
             });
 
-            // 恢复customNotes分配
             if (state.customNotesAssign && state.customNotesAssign.length === allNotes.length) {
                 customNotes = allNotes.map((note, i) => {
                     const assign = state.customNotesAssign[i] || {};
@@ -1071,7 +1055,6 @@
                 buildCustomNotes();
             }
 
-            // 更新UI
             trackCountEl.textContent = parsed.numTracks; noteCountEl.textContent = allNotes.length;
             const dm = Math.floor(totalDuration/60), ds = Math.floor(totalDuration%60);
             durationDisplayEl.textContent = dm+'分'+ds+'秒';
@@ -1090,7 +1073,6 @@
             uploadArea.classList.add('has-file');
             renderSamples();
 
-            // 异步解码采样
             if (customSamples.length > 0) {
                 const decodePromises = customSamples.map((s, idx) => {
                     if (s.bufferBase64) {
@@ -1102,7 +1084,7 @@
                 });
                 Promise.all(decodePromises).then(() => {
                     refreshWaterfall2();
-                    saveState(); // 更新状态
+                    saveState();
                 });
             }
 
