@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>音mad快速制作</title>
-    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js">
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
     <style>
         :root {
             --bg: #f5f6f8;
@@ -72,11 +71,13 @@
         .play-line-label { position:absolute; right:10px; top:-16px; font-size:10px; color:var(--text); z-index:11; pointer-events:none; background:rgba(255,255,255,0.8); padding:1px 6px; border-radius:10px; border:1px solid rgba(0,0,0,0.1); }
         .notes-layer { position:absolute; inset:0; z-index:5; pointer-events:none; }
         .note-block {
-            position:absolute; border-radius:0; pointer-events:none;
+            position:absolute; border-radius:0; pointer-events:auto;
             box-shadow:0 1px 4px rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.4);
             font-size:0; color:transparent; min-width:8px; transition:opacity 0.15s;
+            cursor:pointer;
         }
         .note-block.playing { z-index:8; box-shadow:0 0 16px rgba(0,0,0,0.3); border-color:#fff; }
+        .note-block:hover { opacity:0.85; }
         .no-file-hint { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#94a3b8; font-size:13px; z-index:2; pointer-events:none; }
         .section-header { display:flex; align-items:center; gap:10px; margin-bottom:-12px; justify-content:space-between; }
         .section-title { font-size:13px; font-weight:600; color:var(--text); }
@@ -101,6 +102,28 @@
         .sample-delete { width:40px; text-align:center; cursor:pointer; color:#ef4444; font-weight:bold; font-size:18px; transition:0.2s; }
         .sample-delete:hover { background:#fee2e2; }
         .footer-note { text-align:center; color:#4b5563; font-size:12px; margin-top:4px; }
+        .sample-picker-overlay {
+            position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.3);
+            z-index:9999; display:flex; align-items:center; justify-content:center;
+        }
+        .sample-picker-box {
+            background:#fff; border-radius:12px; padding:20px 24px; min-width:200px;
+            max-width:90%; box-shadow:0 8px 30px rgba(0,0,0,0.3);
+        }
+        .sample-picker-box h3 { margin-bottom:12px; font-size:16px; }
+        .sample-picker-box ul { list-style:none; padding:0; margin:0; }
+        .sample-picker-box li {
+            padding:10px 16px; border-bottom:1px solid #eee; cursor:pointer;
+            transition:background 0.15s; border-radius:4px;
+            display:flex; align-items:center; gap:8px;
+        }
+        .sample-picker-box li:last-child { border-bottom:none; }
+        .sample-picker-box li:hover { background:#f0f4ff; }
+        .sample-picker-box .cancel-btn {
+            margin-top:12px; text-align:center; color:#64748b; cursor:pointer;
+            padding:8px; border-radius:4px;
+        }
+        .sample-picker-box .cancel-btn:hover { background:#f1f5f9; }
         @media (max-width:600px){ body{padding:16px 10px 30px;} .btn{padding:8px 18px;font-size:13px;} .visualizer-wrapper{min-height:160px;} }
     </style>
 </head>
@@ -219,6 +242,11 @@
 
     const player1 = { isPlaying: false, animationId: null, scheduledNotes: new Set(), activeOscillators: [], playStartTime: 0, logicalStartOffset: 0, currentLogicalTime: 0 };
     const player2 = { isPlaying: false, animationId: null, scheduledNotes: new Set(), activeOscillators: [], playStartTime: 0, logicalStartOffset: 0, currentLogicalTime: 0 };
+
+    let longPressTimer = null;
+    let longPressTarget = null;
+    let longPressStartX = 0, longPressStartY = 0;
+    const LONG_PRESS_MS = 500;
 
     function getInstrumentGroup(p) {
         if(p<=7) return 'piano'; if(p<=15) return 'chromatic'; if(p<=23) return 'organ';
@@ -585,16 +613,19 @@
         };
         reader.readAsArrayBuffer(file);
     }
+
     function buildCustomNotes(){
-        const sampleIndex = customSamples.length > 0 ? 0 : null;
+        const oldCustom = customNotes.length === allNotes.length ? customNotes : [];
         customNotes = allNotes.map((note, i) => {
+            const old = oldCustom[i] || {};
             const newNote = {...note, _index: i};
-            newNote.customSampleIndex = sampleIndex;
-            newNote.customPitchOffset = 0;
-            newNote.customVolumeScale = 100;
+            newNote.customSampleIndex = (old.customSampleIndex !== undefined && old.customSampleIndex < customSamples.length) ? old.customSampleIndex : (customSamples.length > 0 ? 0 : null);
+            newNote.customPitchOffset = old.customPitchOffset || 0;
+            newNote.customVolumeScale = old.customVolumeScale || 100;
             return newNote;
         });
     }
+
     function updateLegend(){
         if(usedInstruments.size===0){ legendRow.style.display='none'; return; }
         legendRow.style.display='flex';
@@ -603,6 +634,7 @@
         if(count>12) html+='<span class="legend-item">…</span>';
         legendContent.innerHTML=html;
     }
+
     function resetAll(){
         stopPlayerSound(player1); stopPlayerSound(player2);
         if(player1.isPlaying){ player1.isPlaying=false; if(player1.animationId) cancelAnimationFrame(player1.animationId); }
@@ -623,26 +655,28 @@
     }
 
     function addSample(buffer, name){
-        if(customSamples.length >= 10){
-            alert('最多支持10个音色');
-            return;
-        }
+        if(customSamples.length >= 10){ alert('最多支持10个音色'); return; }
         const idx = customSamples.length;
         customSamples.push({buffer, fileName: name, basePitch: 60, color: sampleColors[idx%sampleColors.length]});
         renderSamples();
         if(allNotes.length > 0){
-            buildCustomNotes();
+            if(customNotes.length === 0) buildCustomNotes();
             refreshWaterfall2();
         }
     }
+
     function removeSample(idx){
         customSamples.splice(idx,1);
-        if(allNotes.length > 0){
-            buildCustomNotes();
-            refreshWaterfall2();
+        if(customNotes.length){
+            customNotes.forEach(note => {
+                if(note.customSampleIndex === idx) note.customSampleIndex = customSamples.length > 0 ? 0 : null;
+                else if(note.customSampleIndex > idx) note.customSampleIndex--;
+            });
         }
         renderSamples();
+        if(allNotes.length > 0) refreshWaterfall2();
     }
+
     function renderSamples(){
         sampleListDiv.innerHTML = '';
         customSamples.forEach((s,i) => {
@@ -655,10 +689,110 @@
         });
     }
 
+    function showSamplePicker(noteIndex, x, y) {
+        if (!customSamples.length) return;
+        const overlay = document.createElement('div');
+        overlay.className = 'sample-picker-overlay';
+        const box = document.createElement('div');
+        box.className = 'sample-picker-box';
+        box.innerHTML = `<h3>选择音色</h3><ul></ul><div class="cancel-btn">取消</div>`;
+        const ul = box.querySelector('ul');
+        customSamples.forEach((s, idx) => {
+            const li = document.createElement('li');
+            const dot = document.createElement('span');
+            dot.style.display = 'inline-block';
+            dot.style.width = '16px';
+            dot.style.height = '16px';
+            dot.style.borderRadius = '4px';
+            dot.style.background = s.color || '#aaa';
+            li.prepend(dot);
+            li.appendChild(document.createTextNode(`${idx}: ${s.fileName}`));
+            li.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (customNotes[noteIndex]) {
+                    customNotes[noteIndex].customSampleIndex = idx;
+                    refreshWaterfall2();
+                    document.body.removeChild(overlay);
+                }
+            });
+            ul.appendChild(li);
+        });
+        box.querySelector('.cancel-btn').addEventListener('click', () => {
+            document.body.removeChild(overlay);
+        });
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) document.body.removeChild(overlay);
+        });
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        box.style.position = 'absolute';
+        box.style.top = '50%';
+        box.style.left = '50%';
+        box.style.transform = 'translate(-50%, -50%)';
+    }
+
+    function setupLongPress() {
+        const el = layer2;
+        if (!el) return;
+        el.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        const start = (e) => {
+            const target = e.target.closest?.('.note-block') || e.target;
+            if (!target || !target.classList.contains('note-block')) {
+                clearLongPress();
+                return;
+            }
+            const noteIdx = parseInt(target.dataset.noteIndex);
+            if (isNaN(noteIdx) || !customNotes[noteIdx]) {
+                clearLongPress();
+                return;
+            }
+            const clientX = e.clientX || e.touches?.[0]?.clientX || 0;
+            const clientY = e.clientY || e.touches?.[0]?.clientY || 0;
+            longPressStartX = clientX;
+            longPressStartY = clientY;
+            longPressTarget = target;
+            longPressTimer = setTimeout(() => {
+                const idx = parseInt(longPressTarget.dataset.noteIndex);
+                if (!isNaN(idx) && customNotes[idx]) {
+                    showSamplePicker(idx, clientX, clientY);
+                }
+                clearLongPress();
+            }, LONG_PRESS_MS);
+        };
+
+        const move = (e) => {
+            const clientX = e.clientX || e.touches?.[0]?.clientX || 0;
+            const clientY = e.clientY || e.touches?.[0]?.clientY || 0;
+            if (Math.abs(clientX - longPressStartX) > 10 || Math.abs(clientY - longPressStartY) > 10) {
+                clearLongPress();
+            }
+        };
+
+        const end = () => { clearLongPress(); };
+
+        const clearLongPress = () => {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            longPressTarget = null;
+        };
+
+        el.addEventListener('mousedown', start);
+        el.addEventListener('touchstart', start, { passive: true });
+        el.addEventListener('mousemove', move);
+        el.addEventListener('touchmove', move, { passive: true });
+        el.addEventListener('mouseup', end);
+        el.addEventListener('touchend', end);
+        el.addEventListener('mouseleave', end);
+        el.addEventListener('touchcancel', end);
+    }
+
     btnExportCustom.addEventListener('click', async () => {
         if (!customNotes.length) return;
         btnExportCustom.disabled = true;
-        btnExportCustom.textContent = '渲染中...  这可能需要一些时间...';
+        btnExportCustom.textContent = '渲染中... 这可能需要一些时间...';
         try {
             const offlineCtx = new OfflineAudioContext(2, 44100 * Math.ceil(totalDuration + 1), 44100);
             const masterGain = offlineCtx.createGain();
@@ -783,6 +917,7 @@
 
     buildGridLines(grid1); buildGridLines(grid2);
     resetAll();
+    setupLongPress();
 })();
 </script>
 </body>
