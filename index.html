@@ -97,9 +97,6 @@
         .wav-upload-area:hover { border-color:#94a3b8; background:#f8fafc; }
         .wav-upload-text { font-size:14px; font-weight:600; }
         .wav-upload-sub { font-size:12px; color:var(--text-secondary); margin-top:2px; }
-        .wav-upload-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:6px; justify-content:center; }
-        .wav-upload-row label { font-size:13px; font-weight:500; }
-        .wav-upload-row select { padding:6px 10px; border-radius:6px; border:1px solid var(--border-light); background:white; font-size:13px; }
         .sample-list { display:flex; flex-direction:column; gap:8px; }
         .sample-item {
             display:flex; align-items:center; background:#fff; border:1px solid var(--border-light);
@@ -109,7 +106,9 @@
             width:25%; min-width:60px; background:#e2e8f0; display:flex; align-items:center;
             justify-content:center; font-weight:700; font-size:14px; color:#fff; letter-spacing:0.5px;
         }
-        .sample-info { flex:1; padding:0 14px; font-size:13px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .sample-info { flex:1; padding:0 14px; font-size:13px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:8px; }
+        .sample-info .base-pitch { color:var(--accent-blue); cursor:pointer; background:#eff6ff; padding:0 6px; border-radius:4px; font-weight:600; white-space:nowrap; }
+        .sample-info .base-pitch:hover { background:#dbeafe; }
         .sample-delete { width:40px; text-align:center; cursor:pointer; color:#ef4444; font-weight:bold; font-size:18px; transition:0.2s; }
         .sample-delete:hover { background:#fee2e2; }
         .footer-note { text-align:center; color:#4b5563; font-size:12px; margin-top:4px; }
@@ -207,11 +206,7 @@
 
     <div class="wav-upload-area" id="wavUploadArea">
         <span class="wav-upload-text">🎶 点击此处上传音符 (.wav)</span>
-        <div class="wav-upload-sub">默认基准 Do (C4) · 最多支持10个采样</div>
-        <div class="wav-upload-row">
-            <label for="sampleBasePitch">基准音：</label>
-            <select id="sampleBasePitch"></select>
-        </div>
+        <div class="wav-upload-sub">最多支持10个采样</div>
     </div>
     <input type="file" id="wavFileInput" accept=".wav">
 
@@ -240,7 +235,6 @@
     const sampleListDiv = document.getElementById('sampleList');
     const btnExportCustom = document.getElementById('btnExportCustom');
     const btnResetAll = document.getElementById('btnResetAll');
-    const sampleBasePitchSelect = document.getElementById('sampleBasePitch');
 
     const vis1 = document.getElementById('visualizerOriginal');
     const layer1 = document.getElementById('notesLayer1');
@@ -266,23 +260,6 @@
 
     const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     function getMidiNumber(octave, noteIndex) { return (octave + 1) * 12 + noteIndex; }
-
-    function populateBasePitchSelect() {
-        const select = sampleBasePitchSelect;
-        select.innerHTML = '';
-        for (let oct = 3; oct <= 6; oct++) {
-            for (let ni = 0; ni < 12; ni++) {
-                const midi = getMidiNumber(oct, ni);
-                const name = noteNames[ni] + oct;
-                const option = document.createElement('option');
-                option.value = midi;
-                option.textContent = name;
-                if (midi === 60) option.selected = true;
-                select.appendChild(option);
-            }
-        }
-    }
-    populateBasePitchSelect();
 
     let allNotes = [];
     let customNotes = [];
@@ -879,7 +856,7 @@
 
     function addSample(buffer, name){
         const base64 = arrayBufferToBase64(buffer);
-        const basePitch = parseInt(sampleBasePitchSelect.value) || 60;
+        const basePitch = 60;
         return addSampleFromBuffer(buffer, name, base64, basePitch);
     }
 
@@ -907,11 +884,67 @@
                 return noteNames[ni] + oct;
             })();
             div.innerHTML = `<div class="sample-color" style="background:${s.color}">#Note${i}</div>
-                     <div class="sample-info">${s.fileName} (基准:${pitchName}) ${hasBuffer ? '' : '(缺失)'}</div>
+                     <div class="sample-info">
+                        <span>${s.fileName}</span>
+                        <span class="base-pitch" data-index="${i}">基准: ${pitchName}</span>
+                        ${hasBuffer ? '' : '<span style="color:#ef4444;font-size:12px;">(缺失)</span>'}
+                     </div>
                      <div class="sample-delete">✕</div>`;
+            const pitchSpan = div.querySelector('.base-pitch');
+            pitchSpan.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = parseInt(pitchSpan.dataset.index);
+                showBasePitchPicker(idx);
+            });
             div.querySelector('.sample-delete').onclick = (e) => { e.stopPropagation(); removeSample(i); };
             sampleListDiv.appendChild(div);
         });
+    }
+
+    function showBasePitchPicker(sampleIndex) {
+        const s = customSamples[sampleIndex];
+        if (!s) return;
+        const overlay = document.createElement('div');
+        overlay.className = 'sample-picker-overlay';
+        const box = document.createElement('div');
+        box.className = 'sample-picker-box';
+        box.innerHTML = `<h3>选择基准音</h3><ul></ul><div class="cancel-btn">取消</div>`;
+        const ul = box.querySelector('ul');
+        const octaves = [3,4,5,6];
+        octaves.forEach(oct => {
+            for (let ni = 0; ni < 12; ni++) {
+                const midi = getMidiNumber(oct, ni);
+                const name = noteNames[ni] + oct;
+                const li = document.createElement('li');
+                li.textContent = name;
+                if (midi === s.basePitch) li.style.fontWeight = 'bold';
+                li.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    customSamples[sampleIndex].basePitch = midi;
+                    renderSamples();
+                    // 更新音符颜色和播放
+                    if (allNotes.length > 0) {
+                        // 重新应用该采样到所有使用它的音符，但颜色变化通过刷新瀑布即可
+                        refreshWaterfall2();
+                        saveState();
+                    }
+                    document.body.removeChild(overlay);
+                });
+                ul.appendChild(li);
+            }
+        });
+        box.querySelector('.cancel-btn').addEventListener('click', () => {
+            document.body.removeChild(overlay);
+        });
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) document.body.removeChild(overlay);
+        });
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        box.style.position = 'absolute';
+        box.style.top = '50%';
+        box.style.left = '50%';
+        box.style.transform = 'translate(-50%, -50%)';
     }
 
     function showSamplePicker(noteIndex) {
@@ -932,7 +965,7 @@
         noneDot.style.borderRadius = '4px';
         noneDot.style.background = '#cccccc';
         noneLi.prepend(noneDot);
-        noneLi.appendChild(document.createTextNode('#None (静音)'));
+        noneLi.appendChild(document.createTextNode('#None'));
         noneLi.addEventListener('click', (e) => {
             e.stopPropagation();
             if (customNotes[noteIndex]) {
