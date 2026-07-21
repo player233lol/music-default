@@ -126,5 +126,4 @@ body {
 }
 .sample-picker-box .cancel-btn:hover { background:#f1f5f9; }
 .btn-group { display:flex; gap:8px; flex-wrap:wrap; }
-.none-option { color:#999; font-style:italic; }
 @media (max-width:600px){ body{padding:16px 10px 30px;} .btn{padding:8px 18px;font-size:13px;} .visualizer-wrapper{min-height:160px;} }
