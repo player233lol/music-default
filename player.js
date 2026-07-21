@@ -1,20 +1,20 @@
 function scheduleNoteForPlayer(note, when, playerState){
     if (note.customSampleIndex === -1) return;
     if(!audioCtx||!masterGain) return;
-    const useSample = (note.customSampleIndex != null && customSamples[note.customSampleIndex] && customSamples[note.customSampleIndex].buffer);
-    const vol = (note.velocity/127) * ((note.customVolumeScale||100)/100);
-    const duration = Math.max(0.03, note.endTime - note.startTime);
-    const gain = audioCtx.createGain(); gain.connect(masterGain);
-    let sourceNode;
+    var useSample = (note.customSampleIndex != null && customSamples[note.customSampleIndex] && customSamples[note.customSampleIndex].buffer);
+    var vol = (note.velocity/127) * ((note.customVolumeScale||100)/100);
+    var duration = Math.max(0.03, note.endTime - note.startTime);
+    var gain = audioCtx.createGain(); gain.connect(masterGain);
+    var sourceNode;
     if(useSample){
-        const sample = customSamples[note.customSampleIndex];
-        const src = audioCtx.createBufferSource();
+        var sample = customSamples[note.customSampleIndex];
+        var src = audioCtx.createBufferSource();
         src.buffer = sample.buffer;
-        const base = sample.basePitch||60, target = note.pitch + (note.customPitchOffset||0);
-        let rate = Math.pow(2, (target-base)/12);
-        const sampleDuration = sample.buffer.duration;
+        var base = sample.basePitch||60, target = note.pitch + (note.customPitchOffset||0);
+        var rate = Math.pow(2, (target-base)/12);
+        var sampleDuration = sample.buffer.duration;
         if (duration > sampleDuration && sampleDuration > 0) {
-            const stretchFactor = sampleDuration / duration;
+            var stretchFactor = sampleDuration / duration;
             rate *= stretchFactor;
         }
         src.playbackRate.value = rate;
@@ -25,9 +25,9 @@ function scheduleNoteForPlayer(note, when, playerState){
         src.stop(when+duration);
         sourceNode = src;
     } else {
-        const config = note.config || getConfigForProgram(note.program);
-        const osc = audioCtx.createOscillator(); osc.type = config.waveform;
-        const freq = 440*Math.pow(2,(note.pitch+(note.customPitchOffset||0)-69)/12);
+        var config = note.config || getConfigForProgram(note.program);
+        var osc = audioCtx.createOscillator(); osc.type = config.waveform;
+        var freq = 440*Math.pow(2,(note.pitch+(note.customPitchOffset||0)-69)/12);
         osc.frequency.setValueAtTime(freq, when);
         gain.gain.setValueAtTime(0,when);
         gain.gain.linearRampToValueAtTime(vol*0.9, when+0.005);
@@ -37,15 +37,15 @@ function scheduleNoteForPlayer(note, when, playerState){
         sourceNode = osc;
     }
     playerState.activeOscillators.push({source:sourceNode, gain:gain});
-    const cleanTime = (when+duration+0.1)*1000;
-    setTimeout(() => {
-        const idx = playerState.activeOscillators.findIndex(r => r.source === sourceNode);
+    var cleanTime = (when+duration+0.1)*1000;
+    setTimeout(function() {
+        var idx = playerState.activeOscillators.findIndex(function(r){ return r.source === sourceNode; });
         if(idx >= 0) playerState.activeOscillators.splice(idx, 1);
     }, Math.max(100, cleanTime - performance.now()));
 }
 
 function stopPlayerSound(playerState){
-    playerState.activeOscillators.forEach(r => {
+    playerState.activeOscillators.forEach(function(r) {
         try { r.source.stop(); } catch(e) {}
         try { r.source.disconnect(); } catch(e) {}
         try { r.gain.disconnect(); } catch(e) {}
@@ -54,28 +54,28 @@ function stopPlayerSound(playerState){
     playerState.scheduledNotes.clear();
 }
 
-let isDraggingProgress1 = false;
-let isDraggingProgress2 = false;
+var isDraggingProgress1 = false;
+var isDraggingProgress2 = false;
 
 function updateProgress1() {
     if (!isDraggingProgress1) {
-        const val = Math.min(totalDuration, Math.max(0, player1.currentLogicalTime));
+        var val = Math.min(totalDuration, Math.max(0, player1.currentLogicalTime));
         progress1.value = val;
-        const mins = Math.floor(val/60), secs = Math.floor(val%60);
+        var mins = Math.floor(val/60), secs = Math.floor(val%60);
         progressTime1.textContent = mins + ':' + String(secs).padStart(2,'0');
     }
 }
 function updateProgress2() {
     if (!isDraggingProgress2) {
-        const val = Math.min(totalDuration, Math.max(0, player2.currentLogicalTime));
+        var val = Math.min(totalDuration, Math.max(0, player2.currentLogicalTime));
         progress2.value = val;
-        const mins = Math.floor(val/60), secs = Math.floor(val%60);
+        var mins = Math.floor(val/60), secs = Math.floor(val%60);
         progressTime2.textContent = mins + ':' + String(secs).padStart(2,'0');
     }
 }
 
-progress1.addEventListener('input', (e) => {
-    const val = parseFloat(e.target.value);
+progress1.addEventListener('input', function(e) {
+    var val = parseFloat(e.target.value);
     if (totalDuration > 0) {
         player1.currentLogicalTime = Math.min(totalDuration, Math.max(0, val));
         player1.logicalStartOffset = player1.currentLogicalTime;
@@ -84,16 +84,16 @@ progress1.addEventListener('input', (e) => {
         }
         refreshWaterfall1();
         updateTimeDisplay(player1.currentLogicalTime, timeDisplay1);
-        const mins = Math.floor(val/60), secs = Math.floor(val%60);
+        var mins = Math.floor(val/60), secs = Math.floor(val%60);
         progressTime1.textContent = mins + ':' + String(secs).padStart(2,'0');
     }
 });
-progress1.addEventListener('pointerdown', () => { isDraggingProgress1 = true; });
-progress1.addEventListener('pointerup', () => { isDraggingProgress1 = false; });
-progress1.addEventListener('pointerleave', () => { isDraggingProgress1 = false; });
+progress1.addEventListener('pointerdown', function() { isDraggingProgress1 = true; });
+progress1.addEventListener('pointerup', function() { isDraggingProgress1 = false; });
+progress1.addEventListener('pointerleave', function() { isDraggingProgress1 = false; });
 
-progress2.addEventListener('input', (e) => {
-    const val = parseFloat(e.target.value);
+progress2.addEventListener('input', function(e) {
+    var val = parseFloat(e.target.value);
     if (totalDuration > 0) {
         player2.currentLogicalTime = Math.min(totalDuration, Math.max(0, val));
         player2.logicalStartOffset = player2.currentLogicalTime;
@@ -102,17 +102,17 @@ progress2.addEventListener('input', (e) => {
         }
         refreshWaterfall2();
         updateTimeDisplay(player2.currentLogicalTime, timeDisplay2);
-        const mins = Math.floor(val/60), secs = Math.floor(val%60);
+        var mins = Math.floor(val/60), secs = Math.floor(val%60);
         progressTime2.textContent = mins + ':' + String(secs).padStart(2,'0');
     }
 });
-progress2.addEventListener('pointerdown', () => { isDraggingProgress2 = true; });
-progress2.addEventListener('pointerup', () => { isDraggingProgress2 = false; });
-progress2.addEventListener('pointerleave', () => { isDraggingProgress2 = false; });
+progress2.addEventListener('pointerdown', function() { isDraggingProgress2 = true; });
+progress2.addEventListener('pointerup', function() { isDraggingProgress2 = false; });
+progress2.addEventListener('pointerleave', function() { isDraggingProgress2 = false; });
 
 function animationLoop1(){
     if(!player1.isPlaying || !audioCtx) return;
-    const now = audioCtx.currentTime;
+    var now = audioCtx.currentTime;
     player1.currentLogicalTime = now - player1.playStartTime + player1.logicalStartOffset;
     if(player1.currentLogicalTime >= totalDuration && totalDuration > 0){
         pausePlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1);
@@ -123,12 +123,12 @@ function animationLoop1(){
     }
     refreshWaterfall1();
     updateProgress1();
-    const scheduleWindow = 0.08;
-    for(let i=0; i<allNotes.length; i++){
+    var scheduleWindow = 0.08;
+    for(var i=0; i<allNotes.length; i++){
         if(player1.scheduledNotes.has(i)) continue;
-        const n = allNotes[i];
+        var n = allNotes[i];
         if(n.startTime <= player1.currentLogicalTime + scheduleWindow && n.startTime > player1.currentLogicalTime - 0.02){
-            const delay = n.startTime - player1.currentLogicalTime;
+            var delay = n.startTime - player1.currentLogicalTime;
             if(delay >= -0.01) scheduleNoteForPlayer(n, audioCtx.currentTime + Math.max(0, delay), player1);
             player1.scheduledNotes.add(i);
         }
@@ -139,7 +139,7 @@ function animationLoop1(){
 }
 function animationLoop2(){
     if(!player2.isPlaying || !audioCtx) return;
-    const now = audioCtx.currentTime;
+    var now = audioCtx.currentTime;
     player2.currentLogicalTime = now - player2.playStartTime + player2.logicalStartOffset;
     if(player2.currentLogicalTime >= totalDuration && totalDuration > 0){
         pausePlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2);
@@ -150,12 +150,12 @@ function animationLoop2(){
     }
     refreshWaterfall2();
     updateProgress2();
-    const scheduleWindow = 0.08;
-    for(let i=0; i<customNotes.length; i++){
+    var scheduleWindow = 0.08;
+    for(var i=0; i<customNotes.length; i++){
         if(player2.scheduledNotes.has(i)) continue;
-        const n = customNotes[i];
+        var n = customNotes[i];
         if(n.startTime <= player2.currentLogicalTime + scheduleWindow && n.startTime > player2.currentLogicalTime - 0.02){
-            const delay = n.startTime - player2.currentLogicalTime;
+            var delay = n.startTime - player2.currentLogicalTime;
             if(delay >= -0.01) scheduleNoteForPlayer(n, audioCtx.currentTime + Math.max(0, delay), player2);
             player2.scheduledNotes.add(i);
         }
@@ -166,16 +166,16 @@ function animationLoop2(){
 }
 
 function updateTimeDisplay(time, element){
-    const ct = Math.max(0, time);
-    const cm = Math.floor(ct/60), cs = Math.floor(ct%60);
-    const tm = Math.floor(totalDuration/60), ts = Math.floor(totalDuration%60);
-    element.textContent = `${String(cm).padStart(2,'0')}:${String(cs).padStart(2,'0')} / ${String(tm).padStart(2,'0')}:${String(ts).padStart(2,'0')}`;
+    var ct = Math.max(0, time);
+    var cm = Math.floor(ct/60), cs = Math.floor(ct%60);
+    var tm = Math.floor(totalDuration/60), ts = Math.floor(totalDuration%60);
+    element.textContent = String(cm).padStart(2,'0')+':'+String(cs).padStart(2,'0')+' / '+String(tm).padStart(2,'0')+':'+String(ts).padStart(2,'0');
 }
 
 function startPlayer(playerState, btn, btnText, line, timeDisp){
     if(!allNotes.length) return;
     initAudio();
-    if(audioCtx.state === 'suspended') audioCtx.resume().then(() => startPlayerInternal(playerState, btn, btnText, line, timeDisp));
+    if(audioCtx.state === 'suspended') audioCtx.resume().then(function(){ startPlayerInternal(playerState, btn, btnText, line, timeDisp); });
     else startPlayerInternal(playerState, btn, btnText, line, timeDisp);
 }
 function startPlayerInternal(playerState, btn, btnText, line, timeDisp){
@@ -225,12 +225,12 @@ function resetPlayer(playerState, btn, btnText, line, timeDisp){
     updateTimeDisplay(0, timeDisp);
 }
 
-btnPlay1.addEventListener('click', () => { if(!allNotes.length) return; initAudio(); player1.isPlaying ? pausePlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1) : startPlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1); });
-btnReset1.addEventListener('click', () => resetPlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1));
-btnPlay2.addEventListener('click', () => { if(!customNotes.length) return; initAudio(); player2.isPlaying ? pausePlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2) : startPlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2); });
-btnReset2.addEventListener('click', () => resetPlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2));
+btnPlay1.addEventListener('click', function(){ if(!allNotes.length) return; initAudio(); player1.isPlaying ? pausePlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1) : startPlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1); });
+btnReset1.addEventListener('click', function(){ resetPlayer(player1, btnPlay1, btnPlayText1, playLine1, timeDisplay1); });
+btnPlay2.addEventListener('click', function(){ if(!customNotes.length) return; initAudio(); player2.isPlaying ? pausePlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2) : startPlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2); });
+btnReset2.addEventListener('click', function(){ resetPlayer(player2, btnPlay2, btnPlayText2, playLine2, timeDisplay2); });
 
-document.addEventListener('keydown', e => {
+document.addEventListener('keydown', function(e) {
     if(e.code === 'Space' && e.target === document.body){
         e.preventDefault();
         if(allNotes.length){
