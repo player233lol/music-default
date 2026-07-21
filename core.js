@@ -1,62 +1,58 @@
-// ========== 全局变量 ==========
-const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+var noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 function getMidiNumber(octave, noteIndex) { return (octave + 1) * 12 + noteIndex; }
 
-let allNotes = [];
-let customNotes = [];
-let usedInstruments = new Map();
-let totalDuration = 0;
-let audioCtx = null;
-let masterGain = null;
-let customSamples = [];
-const sampleColors = ['#e53e3e','#dd6b20','#d69e2e','#3182ce','#6b46c1','#00a3c4','#805ad5','#38b2ac','#d53f8c','#c05621'];
-const lookAhead = 3.4;
-let midiFileBase64 = null;
-let midiFileName = '';  // 存储MIDI文件名（不含扩展名）
+var allNotes = [];
+var customNotes = [];
+var usedInstruments = new Map();
+var totalDuration = 0;
+var audioCtx = null;
+var masterGain = null;
+var customSamples = [];
+var sampleColors = ['#e53e3e','#dd6b20','#d69e2e','#3182ce','#6b46c1','#00a3c4','#805ad5','#38b2ac','#d53f8c','#c05621'];
+var lookAhead = 3.4;
+var midiFileBase64 = null;
+var midiFileName = '';
 
-// 播放器状态
-const player1 = { isPlaying: false, animationId: null, scheduledNotes: new Set(), activeOscillators: [], playStartTime: 0, logicalStartOffset: 0, currentLogicalTime: 0 };
-const player2 = { isPlaying: false, animationId: null, scheduledNotes: new Set(), activeOscillators: [], playStartTime: 0, logicalStartOffset: 0, currentLogicalTime: 0 };
+var player1 = { isPlaying: false, animationId: null, scheduledNotes: new Set(), activeOscillators: [], playStartTime: 0, logicalStartOffset: 0, currentLogicalTime: 0 };
+var player2 = { isPlaying: false, animationId: null, scheduledNotes: new Set(), activeOscillators: [], playStartTime: 0, logicalStartOffset: 0, currentLogicalTime: 0 };
 
-// DOM 引用（全局）
-const uploadArea = document.getElementById('uploadArea');
-const fileInput = document.getElementById('fileInput');
-const fileNameEl = document.getElementById('fileName');
-const legendRow = document.getElementById('legendRow');
-const legendContent = document.getElementById('legendContent');
-const trackCountEl = document.getElementById('trackCount');
-const noteCountEl = document.getElementById('noteCount');
-const durationDisplayEl = document.getElementById('durationDisplay');
-const bpmDisplayEl = document.getElementById('bpmDisplay');
-const wavUploadArea = document.getElementById('wavUploadArea');
-const wavFileInput = document.getElementById('wavFileInput');
-const sampleListDiv = document.getElementById('sampleList');
-const btnExportCustom = document.getElementById('btnExportCustom');
-const btnResetAll = document.getElementById('btnResetAll');
+var uploadArea = document.getElementById('uploadArea');
+var fileInput = document.getElementById('fileInput');
+var fileNameEl = document.getElementById('fileName');
+var legendRow = document.getElementById('legendRow');
+var legendContent = document.getElementById('legendContent');
+var trackCountEl = document.getElementById('trackCount');
+var noteCountEl = document.getElementById('noteCount');
+var durationDisplayEl = document.getElementById('durationDisplay');
+var bpmDisplayEl = document.getElementById('bpmDisplay');
+var wavUploadArea = document.getElementById('wavUploadArea');
+var wavFileInput = document.getElementById('wavFileInput');
+var sampleListDiv = document.getElementById('sampleList');
+var btnExportCustom = document.getElementById('btnExportCustom');
+var btnResetAll = document.getElementById('btnResetAll');
 
-const vis1 = document.getElementById('visualizerOriginal');
-const layer1 = document.getElementById('notesLayer1');
-const grid1 = document.getElementById('gridLines1');
-const playLine1 = document.getElementById('playLine1');
-const btnPlay1 = document.getElementById('btnPlay1');
-const btnPlayText1 = document.getElementById('btnPlayText1');
-const btnReset1 = document.getElementById('btnReset1');
-const timeDisplay1 = document.getElementById('timeDisplay1');
-const progress1 = document.getElementById('progress1');
-const progressTime1 = document.getElementById('progressTime1');
+var vis1 = document.getElementById('visualizerOriginal');
+var layer1 = document.getElementById('notesLayer1');
+var grid1 = document.getElementById('gridLines1');
+var playLine1 = document.getElementById('playLine1');
+var btnPlay1 = document.getElementById('btnPlay1');
+var btnPlayText1 = document.getElementById('btnPlayText1');
+var btnReset1 = document.getElementById('btnReset1');
+var timeDisplay1 = document.getElementById('timeDisplay1');
+var progress1 = document.getElementById('progress1');
+var progressTime1 = document.getElementById('progressTime1');
 
-const vis2 = document.getElementById('visualizerCustom');
-const layer2 = document.getElementById('notesLayer2');
-const grid2 = document.getElementById('gridLines2');
-const playLine2 = document.getElementById('playLine2');
-const btnPlay2 = document.getElementById('btnPlay2');
-const btnPlayText2 = document.getElementById('btnPlayText2');
-const btnReset2 = document.getElementById('btnReset2');
-const timeDisplay2 = document.getElementById('timeDisplay2');
-const progress2 = document.getElementById('progress2');
-const progressTime2 = document.getElementById('progressTime2');
+var vis2 = document.getElementById('visualizerCustom');
+var layer2 = document.getElementById('notesLayer2');
+var grid2 = document.getElementById('gridLines2');
+var playLine2 = document.getElementById('playLine2');
+var btnPlay2 = document.getElementById('btnPlay2');
+var btnPlayText2 = document.getElementById('btnPlayText2');
+var btnReset2 = document.getElementById('btnReset2');
+var timeDisplay2 = document.getElementById('timeDisplay2');
+var progress2 = document.getElementById('progress2');
+var progressTime2 = document.getElementById('progressTime2');
 
-// ========== 工具函数 ==========
 function getInstrumentGroup(p) {
     if(p<=7) return 'piano'; if(p<=15) return 'chromatic'; if(p<=23) return 'organ';
     if(p<=31) return 'guitar'; if(p<=39) return 'bass'; if(p<=47) return 'strings';
@@ -65,7 +61,7 @@ function getInstrumentGroup(p) {
     if(p<=103) return 'synth_fx'; if(p<=111) return 'ethnic'; if(p<=119) return 'percussive';
     return 'sfx';
 }
-const instrumentConfig = {
+var instrumentConfig = {
     piano:{color:'#e53e3e',name:'钢琴',waveform:'triangle',attack:0.008,decay:0.4,sustain:0.15},
     chromatic:{color:'#dd6b20',name:'打击旋律',waveform:'square',attack:0.003,decay:0.25,sustain:0.05},
     organ:{color:'#d69e2e',name:'风琴',waveform:'square',attack:0.04,decay:0.15,sustain:0.7},
@@ -86,42 +82,45 @@ const instrumentConfig = {
 function getConfigForProgram(p){ return instrumentConfig[getInstrumentGroup(p)] || instrumentConfig.piano; }
 
 function arrayBufferToBase64(buffer) {
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    var bytes = new Uint8Array(buffer);
+    var binary = '';
+    for (var i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
     return btoa(binary);
 }
 function base64ToArrayBuffer(base64) {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    var binary = atob(base64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     return bytes.buffer;
 }
 
-// ========== 本地存储 ==========
 function saveState() {
     try {
-        const state = {
+        var state = {
             midiBase64: midiFileBase64,
             midiFileName: midiFileName,
-            samples: customSamples.map(s => ({
-                fileName: s.fileName,
-                color: s.color,
-                basePitch: s.basePitch,
-                bufferBase64: s.bufferBase64 || null
-            })),
-            customNotesAssign: customNotes.map(n => ({
-                customSampleIndex: n.customSampleIndex,
-                customPitchOffset: n.customPitchOffset,
-                customVolumeScale: n.customVolumeScale
-            }))
+            samples: customSamples.map(function(s) {
+                return {
+                    fileName: s.fileName,
+                    color: s.color,
+                    basePitch: s.basePitch,
+                    bufferBase64: s.bufferBase64 || null
+                };
+            }),
+            customNotesAssign: customNotes.map(function(n) {
+                return {
+                    customSampleIndex: n.customSampleIndex,
+                    customPitchOffset: n.customPitchOffset,
+                    customVolumeScale: n.customVolumeScale
+                };
+            })
         };
         localStorage.setItem('soundmaker_state', JSON.stringify(state));
     } catch(e) {}
 }
 
 function loadState() {
-    const raw = localStorage.getItem('soundmaker_state');
+    var raw = localStorage.getItem('soundmaker_state');
     if (!raw) return null;
     try { return JSON.parse(raw); } catch(e) { return null; }
 }
