@@ -24,11 +24,10 @@ btnExportCustom.addEventListener('click', async function() {
                 src.buffer = sample.buffer;
                 var basePitch = sample.basePitch || 60;
                 var targetPitch = note.pitch + (note.customPitchOffset || 0);
-                var rate = Math.pow(2, (targetPitch - basePitch) / 12);
+                var pitchRate = Math.pow(2, (targetPitch - basePitch) / 12);
                 var sampleDur = sample.buffer.duration;
-                if (dur > sampleDur && sampleDur > 0) {
-                    rate *= sampleDur / dur;
-                }
+                var stretchRate = sampleDur / dur;
+                var rate = pitchRate * stretchRate;
                 src.playbackRate.value = rate;
                 gain.gain.setValueAtTime(vol, when);
                 gain.gain.setValueAtTime(0.001, when + dur + 0.05);
