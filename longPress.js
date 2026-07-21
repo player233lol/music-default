@@ -1,21 +1,20 @@
-// 长按变量
-let longPressTimer = null;
-let longPressTarget = null;
-let longPressStartX = 0, longPressStartY = 0;
-const LONG_PRESS_MS = 500;
+var longPressTimer = null;
+var longPressTarget = null;
+var longPressStartX = 0, longPressStartY = 0;
+var LONG_PRESS_MS = 500;
 
 function showSamplePicker(noteIndex) {
-    const overlay = document.createElement('div');
+    var overlay = document.createElement('div');
     overlay.className = 'sample-picker-overlay';
-    const box = document.createElement('div');
+    var box = document.createElement('div');
     box.className = 'sample-picker-box';
-    box.innerHTML = `<h3>选择音色</h3><ul></ul><div class="cancel-btn">取消</div>`;
-    const ul = box.querySelector('ul');
+    box.innerHTML = '<h3>选择音色</h3><ul></ul><div class="cancel-btn">取消</div>';
+    var ul = box.querySelector('ul');
 
-    const noneLi = document.createElement('li');
+    var noneLi = document.createElement('li');
     noneLi.style.color = '#999';
     noneLi.style.fontStyle = 'italic';
-    const noneDot = document.createElement('span');
+    var noneDot = document.createElement('span');
     noneDot.style.display = 'inline-block';
     noneDot.style.width = '16px';
     noneDot.style.height = '16px';
@@ -23,7 +22,7 @@ function showSamplePicker(noteIndex) {
     noneDot.style.background = '#cccccc';
     noneLi.prepend(noneDot);
     noneLi.appendChild(document.createTextNode('#None (静音)'));
-    noneLi.addEventListener('click', (e) => {
+    noneLi.addEventListener('click', function(e) {
         e.stopPropagation();
         if (customNotes[noteIndex]) {
             customNotes[noteIndex].customSampleIndex = -1;
@@ -34,23 +33,23 @@ function showSamplePicker(noteIndex) {
     });
     ul.appendChild(noneLi);
 
-    customSamples.forEach((s, idx) => {
-        const li = document.createElement('li');
-        const dot = document.createElement('span');
+    customSamples.forEach(function(s, idx) {
+        var li = document.createElement('li');
+        var dot = document.createElement('span');
         dot.style.display = 'inline-block';
         dot.style.width = '16px';
         dot.style.height = '16px';
         dot.style.borderRadius = '4px';
         dot.style.background = s.color || '#aaa';
         li.prepend(dot);
-        const pitchName = (() => {
-            const midi = s.basePitch || 60;
-            const oct = Math.floor(midi / 12) - 1;
-            const ni = midi % 12;
+        var pitchName = (function() {
+            var midi = s.basePitch || 60;
+            var oct = Math.floor(midi / 12) - 1;
+            var ni = midi % 12;
             return noteNames[ni] + oct;
         })();
-        li.appendChild(document.createTextNode(`#Note${idx}: ${s.fileName} (基准:${pitchName})`));
-        li.addEventListener('click', (e) => {
+        li.appendChild(document.createTextNode('#Note'+idx+': '+s.fileName+' (基准:'+pitchName+')'));
+        li.addEventListener('click', function(e) {
             e.stopPropagation();
             if (customNotes[noteIndex]) {
                 customNotes[noteIndex].customSampleIndex = idx;
@@ -62,10 +61,10 @@ function showSamplePicker(noteIndex) {
         ul.appendChild(li);
     });
 
-    box.querySelector('.cancel-btn').addEventListener('click', () => {
+    box.querySelector('.cancel-btn').addEventListener('click', function() {
         document.body.removeChild(overlay);
     });
-    overlay.addEventListener('click', (e) => {
+    overlay.addEventListener('click', function(e) {
         if (e.target === overlay) document.body.removeChild(overlay);
     });
     overlay.appendChild(box);
@@ -77,28 +76,28 @@ function showSamplePicker(noteIndex) {
 }
 
 function setupLongPress() {
-    const el = layer2;
+    var el = layer2;
     if (!el) return;
-    el.addEventListener('contextmenu', (e) => e.preventDefault());
+    el.addEventListener('contextmenu', function(e) { e.preventDefault(); });
 
-    const start = (e) => {
-        const target = e.target.closest?.('.note-block') || e.target;
+    var start = function(e) {
+        var target = e.target.closest && e.target.closest('.note-block') || e.target;
         if (!target || !target.classList.contains('note-block')) {
             clearLongPress();
             return;
         }
-        const noteIdx = parseInt(target.dataset.noteIndex);
+        var noteIdx = parseInt(target.dataset.noteIndex);
         if (isNaN(noteIdx) || !customNotes[noteIdx]) {
             clearLongPress();
             return;
         }
-        const clientX = e.clientX || e.touches?.[0]?.clientX || 0;
-        const clientY = e.clientY || e.touches?.[0]?.clientY || 0;
+        var clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX) || 0;
+        var clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY) || 0;
         longPressStartX = clientX;
         longPressStartY = clientY;
         longPressTarget = target;
-        longPressTimer = setTimeout(() => {
-            const idx = parseInt(longPressTarget.dataset.noteIndex);
+        longPressTimer = setTimeout(function() {
+            var idx = parseInt(longPressTarget.dataset.noteIndex);
             if (!isNaN(idx) && customNotes[idx]) {
                 showSamplePicker(idx);
             }
@@ -106,17 +105,17 @@ function setupLongPress() {
         }, LONG_PRESS_MS);
     };
 
-    const move = (e) => {
-        const clientX = e.clientX || e.touches?.[0]?.clientX || 0;
-        const clientY = e.clientY || e.touches?.[0]?.clientY || 0;
+    var move = function(e) {
+        var clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX) || 0;
+        var clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY) || 0;
         if (Math.abs(clientX - longPressStartX) > 10 || Math.abs(clientY - longPressStartY) > 10) {
             clearLongPress();
         }
     };
 
-    const end = () => { clearLongPress(); };
+    var end = function() { clearLongPress(); };
 
-    const clearLongPress = () => {
+    var clearLongPress = function() {
         if (longPressTimer) {
             clearTimeout(longPressTimer);
             longPressTimer = null;
