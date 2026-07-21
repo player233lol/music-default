@@ -96,18 +96,24 @@
 <script src="longPress.js"></script>
 <script src="export.js"></script>
 <script>
-    // 初始化
-    (function init() {
-        buildGridLines(gridLines1);
-        buildGridLines(gridLines2);
-        resetAll();
-        initAudio();
-        const restored = tryRestoreState();
-        if (restored) {
-            alert('欢迎回来，您的工作已恢复');
+(function init() {
+    buildGridLines(grid1);
+    buildGridLines(grid2);
+    resetAll();
+    initAudio();
+    var restored = tryRestoreState();
+    if (restored) {
+        alert('欢迎回来，您的工作已恢复');
+    }
+    setupLongPress();
+    uploadArea.addEventListener('click', function() { fileInput.click(); });
+    fileInput.addEventListener('change', function() {
+        if (fileInput.files[0]) {
+            loadMIDIFile(fileInput.files[0]);
+            fileInput.value = '';
         }
-        setupLongPress();
-    })();
+    });
+})();
 </script>
 </body>
 </html>
