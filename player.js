@@ -11,12 +11,10 @@ function scheduleNoteForPlayer(note, when, playerState){
         var src = audioCtx.createBufferSource();
         src.buffer = sample.buffer;
         var base = sample.basePitch||60, target = note.pitch + (note.customPitchOffset||0);
-        var rate = Math.pow(2, (target-base)/12);
+        var pitchRate = Math.pow(2, (target-base)/12);
         var sampleDuration = sample.buffer.duration;
-        if (duration > sampleDuration && sampleDuration > 0) {
-            var stretchFactor = sampleDuration / duration;
-            rate *= stretchFactor;
-        }
+        var stretchRate = sampleDuration / duration;
+        var rate = pitchRate * stretchRate;
         src.playbackRate.value = rate;
         gain.gain.setValueAtTime(vol, when);
         gain.gain.setValueAtTime(0.001, when+duration+0.05);
