@@ -1,5 +1,3 @@
-// ===================== 采样管理（修复基准音选择） =====================
-
 function addSampleFromBuffer(buffer, name, base64Data, basePitch) {
     if (customSamples.length >= 10) { alert('最多支持10个音色'); return false; }
     var idx = customSamples.length;
@@ -90,7 +88,6 @@ function showBasePitchPicker(sampleIndex) {
     var ul = box.querySelector('ul');
 
     var octaves = [3, 4, 5, 6];
-    // 使用 forEach 避免闭包问题
     octaves.forEach(function(oct) {
         for (var ni = 0; ni < 12; ni++) {
             var midi = getMidiNumber(oct, ni);
@@ -98,8 +95,6 @@ function showBasePitchPicker(sampleIndex) {
             var li = document.createElement('li');
             li.textContent = name;
             if (midi === s.basePitch) li.style.fontWeight = 'bold';
-
-            // 使用立即执行函数捕获当前的 midi 值
             (function(currentMidi) {
                 li.addEventListener('click', function(e) {
                     e.stopPropagation();
@@ -112,7 +107,6 @@ function showBasePitchPicker(sampleIndex) {
                     document.body.removeChild(overlay);
                 });
             })(midi);
-
             ul.appendChild(li);
         }
     });
