@@ -76,7 +76,6 @@ function showBasePitchPicker(sampleIndex) {
     var ul = box.querySelector('ul');
     var octaves = [3, 4, 5, 6];
 
-    // 使用 let 修复闭包问题
     for (let oct of octaves) {
         for (let ni = 0; ni < 12; ni++) {
             let midi = getMidiNumber(oct, ni);
@@ -105,7 +104,3 @@ function showBasePitchPicker(sampleIndex) {
     box.style.left = '50%';
     box.style.transform = 'translate(-50%, -50%)';
 }
-
-// 原有 WAV 上传事件（已在外层绑定，但保留以防万一）
-// 如果您的 default.html 中已经绑定了这些事件，则无需重复
-// 此处仅声明函数，事件绑定已在 default.html 的初始化脚本中完成
