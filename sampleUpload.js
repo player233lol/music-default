@@ -1,9 +1,16 @@
+// ===================== 采样管理（修复基准音选择） =====================
+
 function addSampleFromBuffer(buffer, name, base64Data, basePitch) {
     if (customSamples.length >= 10) { alert('最多支持10个音色'); return false; }
     var idx = customSamples.length;
     var color = sampleColors[idx % sampleColors.length];
-    customSamples.push({ buffer: buffer, fileName: name, basePitch: basePitch || 60, color: color,
-        bufferBase64: base64Data });
+    customSamples.push({
+        buffer: buffer,
+        fileName: name,
+        basePitch: basePitch || 60,
+        color: color,
+        bufferBase64: base64Data
+    });
     renderSamples();
     if (allNotes.length > 0) {
         var needUpdate = false;
@@ -13,8 +20,10 @@ function addSampleFromBuffer(buffer, name, base64Data, basePitch) {
                 needUpdate = true;
             }
         });
-        if (needUpdate) { refreshWaterfall2();
-            saveState(); }
+        if (needUpdate) {
+            refreshWaterfall2();
+            saveState();
+        }
     }
     return true;
 }
@@ -31,8 +40,10 @@ function removeSample(idx) {
         else if (n.customSampleIndex > idx) n.customSampleIndex--;
     });
     renderSamples();
-    if (allNotes.length > 0) { refreshWaterfall2();
-        saveState(); }
+    if (allNotes.length > 0) {
+        refreshWaterfall2();
+        saveState();
+    }
 }
 
 function renderSamples() {
@@ -59,8 +70,10 @@ function renderSamples() {
             var idx = parseInt(this.dataset.index);
             showBasePitchPicker(idx);
         });
-        div.querySelector('.sample-delete').onclick = function(e) { e.stopPropagation();
-            removeSample(i); };
+        div.querySelector('.sample-delete').onclick = function(e) {
+            e.stopPropagation();
+            removeSample(i);
+        };
         sampleListDiv.appendChild(div);
     });
 }
@@ -68,35 +81,48 @@ function renderSamples() {
 function showBasePitchPicker(sampleIndex) {
     var s = customSamples[sampleIndex];
     if (!s) return;
+
     var overlay = document.createElement('div');
     overlay.className = 'sample-picker-overlay';
     var box = document.createElement('div');
     box.className = 'sample-picker-box';
     box.innerHTML = '<h3>选择基准音</h3><ul></ul><div class="cancel-btn">取消</div>';
     var ul = box.querySelector('ul');
-    var octaves = [3, 4, 5, 6];
 
-    for (let oct of octaves) {
-        for (let ni = 0; ni < 12; ni++) {
-            let midi = getMidiNumber(oct, ni);
-            let name = noteNames[ni] + oct;
+    var octaves = [3, 4, 5, 6];
+    // 使用 forEach 避免闭包问题
+    octaves.forEach(function(oct) {
+        for (var ni = 0; ni < 12; ni++) {
+            var midi = getMidiNumber(oct, ni);
+            var name = noteNames[ni] + oct;
             var li = document.createElement('li');
             li.textContent = name;
             if (midi === s.basePitch) li.style.fontWeight = 'bold';
-            li.addEventListener('click', function(e) {
-                e.stopPropagation();
-                customSamples[sampleIndex].basePitch = midi;
-                renderSamples();
-                if (allNotes.length > 0) { refreshWaterfall2();
-                    saveState(); }
-                document.body.removeChild(overlay);
-            });
+
+            // 使用立即执行函数捕获当前的 midi 值
+            (function(currentMidi) {
+                li.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    customSamples[sampleIndex].basePitch = currentMidi;
+                    renderSamples();
+                    if (allNotes.length > 0) {
+                        refreshWaterfall2();
+                        saveState();
+                    }
+                    document.body.removeChild(overlay);
+                });
+            })(midi);
+
             ul.appendChild(li);
         }
-    }
+    });
 
-    box.querySelector('.cancel-btn').addEventListener('click', function() { document.body.removeChild(overlay); });
-    overlay.addEventListener('click', function(e) { if (e.target === overlay) document.body.removeChild(overlay); });
+    box.querySelector('.cancel-btn').addEventListener('click', function() {
+        document.body.removeChild(overlay);
+    });
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) document.body.removeChild(overlay);
+    });
     overlay.appendChild(box);
     document.body.appendChild(overlay);
     box.style.position = 'absolute';
