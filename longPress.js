@@ -26,6 +26,7 @@ function showSamplePicker(noteIndex) {
         e.stopPropagation();
         if (customNotes[noteIndex]) {
             customNotes[noteIndex].customSampleIndex = -1;
+            customNotes[noteIndex].customPitchOffset = 0;
             refreshWaterfall2();
             saveState();
             document.body.removeChild(overlay);
@@ -53,6 +54,7 @@ function showSamplePicker(noteIndex) {
             e.stopPropagation();
             if (customNotes[noteIndex]) {
                 customNotes[noteIndex].customSampleIndex = idx;
+                customNotes[noteIndex].customPitchOffset = 0;
                 refreshWaterfall2();
                 saveState();
                 document.body.removeChild(overlay);
